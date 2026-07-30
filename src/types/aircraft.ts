@@ -138,6 +138,8 @@ export interface GearComponent {
 export interface AircraftModel {
   id: string;
   name: string;
+  version?: string;
+  units?: UnitSystem;
   fuselage: FuselageComponent;
   wings: WingComponent[];
   tails: TailComponent[];
@@ -158,3 +160,15 @@ export interface AirfoilData {
   thickness: number;
   maxCamber: number;
 }
+
+export interface AeroMetrics {
+  totalVolume: number;
+  wettedArea: number;
+  referenceArea: number;
+  aspectRatio: number;
+  meanAerodynamicChord: number;
+  taperRatio: number;
+  estimatedEmptyWeight: number;
+  centerOfGravity: [number, number, number];
+}
+
