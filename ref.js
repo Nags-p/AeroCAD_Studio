@@ -1,0 +1,3 @@
+// OpenVSP Parametric Studio - Engine with Nose Apex & Tail Tip Spatial Point Shifting
+
+// -------------------------------------------------------------// PARAMETRIC STATE// -------------------------------------------------------------const state = {fuselage: {length: 12.0,radius: 2.2,noseRoundness: 0.75,noseAngle: 90,noseZ: 0.0,noseY: 0.0,sec1_w: 1.8,sec1_h: 1.6,sec1_x: 0.20,sec2_w: 3.6,sec2_h: 2.4,sec2_x: 0.50,
