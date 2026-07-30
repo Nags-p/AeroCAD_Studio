@@ -30,7 +30,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
     };
     return generateWingGeometry(vWing);
   }
@@ -55,7 +55,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0012',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
     };
 
     // Top horizontal tail mounted at top of vertical fin
@@ -83,7 +83,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0009',
       rootPos: topPos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
     };
 
     return mergeGeometries([generateWingGeometry(vertWing), generateWingGeometry(horizWing)]);
@@ -109,7 +109,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
     };
 
     // Left & right twin vertical fins mounted on horizontal tips
@@ -135,7 +135,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: finRightPos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
     };
 
     const lFin: WingComponent = { ...rFin, id: tail.id + '_lf', rootPos: finLeftPos };
@@ -166,7 +166,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     airfoilName: 'NACA 0009',
     rootPos: pos,
     color: tail.color,
-    winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+    winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
   };
 
   const vert: WingComponent = {
@@ -187,7 +187,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     airfoilName: 'NACA 0012',
     rootPos: pos,
     color: tail.color,
-    winglets: { enabled: false, height: 0, sweep: 0, cant: 0, toe: 0, filletRadius: 0 },
+    winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
   };
 
   return mergeGeometries([generateWingGeometry(horiz), generateWingGeometry(vert)]);

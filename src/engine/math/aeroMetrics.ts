@@ -17,9 +17,9 @@ export function calculateAeroMetrics(model: AircraftModel): AeroMetrics {
   const fus = model.fuselage;
   if (fus && fus.visible) {
     const fusLength = fus.length;
-    const fusRadius = fus.maxRadius;
+    const fusRadius = fus.radius;
     // Approximated volumetric cylinder with nose/tail taper factors
-    const fusVol = Math.PI * Math.pow(fusRadius, 2) * fusLength * (1 - 0.2 * fus.noseRoundness - 0.3 * fus.tailTaper);
+    const fusVol = Math.PI * Math.pow(fusRadius, 2) * fusLength * (1 - 0.2 * fus.noseRoundness - 0.3 * fus.tail);
     const fusWetted = 2 * Math.PI * fusRadius * fusLength;
     const fusMass = fusVol * 120; // ~120 kg/m^3 structural density for aluminum/composite shell
 

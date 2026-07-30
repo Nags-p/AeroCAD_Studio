@@ -224,7 +224,7 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     deleteEngine: (engineId) => {
       const model = get().model;
       if (model.engines.length <= 1) return;
-      const engines = model.engines.filter((e) => e.id !== sectionId && e.id !== engineId);
+      const engines = model.engines.filter((e) => e.id !== engineId);
       pushState({ ...model, engines });
     },
 
@@ -264,7 +264,7 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       newModel.tails = newModel.tails.map((t) => (t.id === id ? { ...t, locked: !t.locked } : t));
       newModel.engines = newModel.engines.map((e) => (e.id === id ? { ...e, locked: !e.locked } : e));
       if (newModel.gear.id === id) {
-        newModel.gear.locked = !newModel.locked;
+        newModel.gear.locked = !newModel.gear.locked;
       }
 
       pushState(newModel);
