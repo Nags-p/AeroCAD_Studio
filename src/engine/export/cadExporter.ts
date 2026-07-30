@@ -16,7 +16,7 @@ export function downloadFile(content: any, filename: string, mimeType: string) {
     } else if (content instanceof ArrayBuffer) {
       blob = new Blob([content], { type: mimeType });
     } else if (ArrayBuffer.isView(content)) {
-      blob = new Blob([content], { type: mimeType });
+      blob = new Blob([content as any], { type: mimeType });
     } else {
       blob = new Blob([JSON.stringify(content, null, 2)], { type: mimeType });
     }
