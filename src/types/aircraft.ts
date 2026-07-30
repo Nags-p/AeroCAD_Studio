@@ -144,3 +144,17 @@ export interface AircraftModel {
   engines: EngineComponent[];
   gear: GearComponent;
 }
+
+export interface AirfoilPoint {
+  x: number;
+  y: number;
+}
+
+export interface AirfoilData {
+  name: string;
+  upper: AirfoilPoint[];
+  lower: AirfoilPoint[];
+  camber: AirfoilPoint[];
+  thickness: number;
+  maxCamber: number;
+}
