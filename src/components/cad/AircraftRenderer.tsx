@@ -30,7 +30,7 @@ function SectionHighlightRing({
   isSelected: boolean;
   offsetZ?: number;
   offsetY?: number;
-  onClick?: (e?: ThreeEvent<MouseEvent>) => void;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const rx = Math.max(0.05, (width / 2) * 1.025);
   const ry = Math.max(0.05, (height / 2) * 1.025);
@@ -197,8 +197,8 @@ export function AircraftRenderer() {
                   width={sec.width}
                   height={sec.height}
                   isSelected={isSel}
-                  onClick={(e: ThreeEvent<MouseEvent>) => {
-                    if (e) e.stopPropagation();
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setSelected(sec.id, 'section');
                   }}
                 />
