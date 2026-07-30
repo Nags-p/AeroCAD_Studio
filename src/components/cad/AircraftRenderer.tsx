@@ -2,6 +2,7 @@
 
 import React, { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
+import { ThreeEvent } from '@react-three/fiber';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
 import { generateFuselageGeometry, resolveStationPositions } from '@/engine/generators/fuselageGenerator';
@@ -29,7 +30,7 @@ function SectionHighlightRing({
   isSelected: boolean;
   offsetZ?: number;
   offsetY?: number;
-  onClick?: (e?: THREE.Event) => void;
+  onClick?: (e?: ThreeEvent<MouseEvent>) => void;
 }) {
   const rx = Math.max(0.05, (width / 2) * 1.025);
   const ry = Math.max(0.05, (height / 2) * 1.025);
@@ -177,7 +178,7 @@ export function AircraftRenderer() {
           <mesh
             geometry={fuselageGeo}
             material={getMaterial(model.fuselage.color, selectedType === 'fuselage' && selectedId === model.fuselage.id)}
-            onClick={(e) => {
+            onClick={(e: ThreeEvent<MouseEvent>) => {
               e.stopPropagation();
               setSelected(model.fuselage.id, 'fuselage');
             }}
@@ -196,7 +197,7 @@ export function AircraftRenderer() {
                   width={sec.width}
                   height={sec.height}
                   isSelected={isSel}
-                  onClick={(e) => {
+                  onClick={(e: ThreeEvent<MouseEvent>) => {
                     if (e) e.stopPropagation();
                     setSelected(sec.id, 'section');
                   }}
@@ -212,7 +213,7 @@ export function AircraftRenderer() {
           <mesh
             geometry={geo}
             material={getMaterial(color, selectedType === 'wing' && selectedId === id)}
-            onClick={(e) => {
+            onClick={(e: ThreeEvent<MouseEvent>) => {
               e.stopPropagation();
               setSelected(id, 'wing');
             }}
@@ -226,7 +227,7 @@ export function AircraftRenderer() {
           <mesh
             geometry={geo}
             material={getMaterial(color, selectedType === 'tail' && selectedId === id)}
-            onClick={(e) => {
+            onClick={(e: ThreeEvent<MouseEvent>) => {
               e.stopPropagation();
               setSelected(id, 'tail');
             }}
@@ -240,7 +241,7 @@ export function AircraftRenderer() {
           <mesh
             geometry={geo}
             material={getMaterial(color, selectedType === 'engine' && selectedId === id)}
-            onClick={(e) => {
+            onClick={(e: ThreeEvent<MouseEvent>) => {
               e.stopPropagation();
               setSelected(id, 'engine');
             }}
@@ -254,7 +255,7 @@ export function AircraftRenderer() {
           <mesh
             geometry={gearGeo}
             material={getMaterial(model.gear.color, selectedType === 'gear' && selectedId === model.gear.id)}
-            onClick={(e) => {
+            onClick={(e: ThreeEvent<MouseEvent>) => {
               e.stopPropagation();
               setSelected(model.gear.id, 'gear');
             }}
