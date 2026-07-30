@@ -5,7 +5,7 @@ const nextConfig = {
     unoptimized: true,
   },
   // If your GitHub Pages URL is https://<username>.github.io/AeroCAD_Studio, uncomment the line below:
-  // basePath: process.env.NODE_ENV === 'production' ? '/AeroCAD_Studio' : '',
+  basePath: process.env.NODE_ENV === 'production' ? '/AeroCAD_Studio' : '',
   reactStrictMode: true,
   transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   webpack: (config) => {
