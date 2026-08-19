@@ -166,24 +166,14 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       if (storedDeletedIds) set({ deletedDriveIds: JSON.parse(storedDeletedIds) });
 
       if (stored) {
-        set({ files: JSON.parse(stored) });
+        const parsedFiles: SavedFile[] = JSON.parse(stored);
+        // Filter out initial demo files so default is 0 files
+        const userFiles = parsedFiles.filter((f) => !f.id.startsWith('file-demo-'));
+        set({ files: userFiles });
+        localStorage.setItem('aerocad_files', JSON.stringify(userFiles));
       } else {
-        const initialFiles: SavedFile[] = [
-          {
-            id: 'file-demo-delta',
-            name: 'Delta Fighter Prototype',
-            lastModified: new Date().toLocaleString(),
-            model: JSON.parse(JSON.stringify(AIRCRAFT_PRESETS.delta_strike)),
-          },
-          {
-            id: 'file-demo-commercial',
-            name: 'Airliner Transport Concept',
-            lastModified: new Date().toLocaleString(),
-            model: JSON.parse(JSON.stringify(AIRCRAFT_PRESETS.commercial)),
-          }
-        ];
-        localStorage.setItem('aerocad_files', JSON.stringify(initialFiles));
-        set({ files: initialFiles });
+        localStorage.setItem('aerocad_files', JSON.stringify([]));
+        set({ files: [] });
       }
 
       if (storedTrash) {
