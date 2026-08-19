@@ -239,7 +239,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     if (!file) return;
 
     const updatedFiles = get().files.filter((f) => f.id !== id);
-    
+
     // Move to trash
     const trashedFile: SavedFile = {
       ...file,
@@ -247,25 +247,22 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     };
     const updatedTrash = [trashedFile, ...get().trashFiles];
 
-    set({ files: updatedFiles, trashFiles: updatedTrash });
+    // If file has a driveFileId, track it in deletedDriveIds so sync will NEVER restore it
+    let updatedDeletedIds = get().deletedDriveIds;
+    if (file.driveFileId) {
+      updatedDeletedIds = Array.from(new Set([...updatedDeletedIds, file.driveFileId]));
+      if (get().driveAccessToken) {
+        get().deleteFileFromDrive(file.driveFileId);
+      }
+    }
+
+    set({ files: updatedFiles, trashFiles: updatedTrash, deletedDriveIds: updatedDeletedIds });
     localStorage.setItem('aerocad_files', JSON.stringify(updatedFiles));
     localStorage.setItem('aerocad_trash', JSON.stringify(updatedTrash));
+    localStorage.setItem('aerocad_deleted_drive_ids', JSON.stringify(updatedDeletedIds));
 
     if (get().activeFileId === id) {
       set({ activeFileId: null });
-    }
-
-    // Delete from drive since it's trashed locally
-    if (file.driveFileId && get().driveAccessToken) {
-      // Track this Drive file ID so sync doesn't re-download it
-      const updatedDeletedIds = [...get().deletedDriveIds, file.driveFileId];
-      set({ deletedDriveIds: updatedDeletedIds });
-      localStorage.setItem('aerocad_deleted_drive_ids', JSON.stringify(updatedDeletedIds));
-
-      get().deleteFileFromDrive(file.driveFileId);
-      delete trashedFile.driveFileId;
-      // Update trash in localStorage with removed driveFileId
-      localStorage.setItem('aerocad_trash', JSON.stringify(get().trashFiles));
     }
   },
 
@@ -299,16 +296,23 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     if (!file) return;
 
     const updatedTrash = get().trashFiles.filter((f) => f.id !== id);
-    
+
+    // Remove file.driveFileId from deletedDriveIds if present so it can sync again
+    let updatedDeletedIds = get().deletedDriveIds;
+    if (file.driveFileId) {
+      updatedDeletedIds = updatedDeletedIds.filter((dId) => dId !== file.driveFileId);
+    }
+
     const restoredFile: SavedFile = {
       ...file,
       lastModified: new Date().toLocaleString(),
     };
     const updatedFiles = [restoredFile, ...get().files];
 
-    set({ files: updatedFiles, trashFiles: updatedTrash });
+    set({ files: updatedFiles, trashFiles: updatedTrash, deletedDriveIds: updatedDeletedIds });
     localStorage.setItem('aerocad_files', JSON.stringify(updatedFiles));
     localStorage.setItem('aerocad_trash', JSON.stringify(updatedTrash));
+    localStorage.setItem('aerocad_deleted_drive_ids', JSON.stringify(updatedDeletedIds));
 
     // Re-upload to drive if connected
     if (get().driveAccessToken && get().drivePassphrase) {
@@ -317,14 +321,40 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
   },
 
   deletePermanently: (id) => {
+    const file = get().trashFiles.find((f) => f.id === id);
+    let updatedDeletedIds = get().deletedDriveIds;
+
+    if (file && file.driveFileId) {
+      updatedDeletedIds = Array.from(new Set([...updatedDeletedIds, file.driveFileId]));
+      if (get().driveAccessToken) {
+        get().deleteFileFromDrive(file.driveFileId);
+      }
+    }
+
     const updatedTrash = get().trashFiles.filter((f) => f.id !== id);
-    set({ trashFiles: updatedTrash });
+    set({ trashFiles: updatedTrash, deletedDriveIds: updatedDeletedIds });
     localStorage.setItem('aerocad_trash', JSON.stringify(updatedTrash));
+    localStorage.setItem('aerocad_deleted_drive_ids', JSON.stringify(updatedDeletedIds));
   },
 
   emptyScrapYard: () => {
-    set({ trashFiles: [] });
+    const trashDriveIds = get().trashFiles
+      .map((f) => f.driveFileId)
+      .filter((id): id is string => !!id);
+
+    let updatedDeletedIds = get().deletedDriveIds;
+    if (trashDriveIds.length > 0) {
+      updatedDeletedIds = Array.from(new Set([...updatedDeletedIds, ...trashDriveIds]));
+      if (get().driveAccessToken) {
+        trashDriveIds.forEach((driveFileId) => {
+          get().deleteFileFromDrive(driveFileId);
+        });
+      }
+    }
+
+    set({ trashFiles: [], deletedDriveIds: updatedDeletedIds });
     localStorage.setItem('aerocad_trash', JSON.stringify([]));
+    localStorage.setItem('aerocad_deleted_drive_ids', JSON.stringify(updatedDeletedIds));
   },
 
   // --- Google Drive Cloud Sync Implementations ---
@@ -358,14 +388,12 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       driveAccessToken: null,
       driveEmail: null,
       isSyncing: false,
-      deletedDriveIds: [],
       files: [],
       trashFiles: [],
       activeFileId: null,
     });
     localStorage.removeItem('aerocad_drive_token');
     localStorage.removeItem('aerocad_drive_email');
-    localStorage.removeItem('aerocad_deleted_drive_ids');
     localStorage.removeItem('aerocad_files');
     localStorage.removeItem('aerocad_trash');
   },
@@ -452,6 +480,15 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     for (const dFile of driveFiles) {
       // Skip files that were explicitly deleted locally
       if (deletedIds.includes(dFile.id)) {
+        get().deleteFileFromDrive(dFile.id);
+        continue;
+      }
+
+      const cleanName = dFile.name.replace('.aerocad', '');
+
+      // Also skip if the file name or driveFileId exists in trash
+      const isInTrash = get().trashFiles.some((f) => f.name === cleanName || f.driveFileId === dFile.id);
+      if (isInTrash) {
         continue;
       }
 
@@ -466,11 +503,6 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
 
         // Decrypt the file
         const decryptedModel = await decryptModel(encryptedText, passphrase);
-        const cleanName = dFile.name.replace('.aerocad', '');
-
-        // Also skip if the file name exists in trash (user deleted it)
-        const isInTrash = get().trashFiles.some((f) => f.name === cleanName);
-        if (isInTrash) continue;
 
         const localIndex = updatedLocalFiles.findIndex((f) => f.name === cleanName);
 
