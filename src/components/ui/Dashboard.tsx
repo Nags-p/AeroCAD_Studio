@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useFileStore } from '@/store/useFileStore';
+import { AircraftThumbnail } from './AircraftThumbnail';
+import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 import {
   Plane,
   FolderOpen,
@@ -214,23 +216,27 @@ export function Dashboard() {
                   { id: 'commercial', label: 'Commercial Airliner (Low Wing)', desc: 'Low-mount swept wings, conventional tail & twin turbofans', icon: Plane, accent: 'text-emerald-500' },
                   { id: 'delta_strike', label: 'Delta Strike Fighter (Mid Wing)', desc: 'Mid-mount supersonic delta wings & single jet engine', icon: Plane, accent: 'text-sky-500' },
                 ].map((tpl) => {
-                  const Icon = tpl.icon;
+                  const presetModel = AIRCRAFT_PRESETS[tpl.id];
                   return (
                     <div
                       key={tpl.id}
                       onClick={() => setSelectedTemplate(tpl.id)}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition flex items-start gap-3 ${
+                      className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center gap-3 ${
                         selectedTemplate === tpl.id
-                          ? 'bg-sky-50/70 border-sky-500/80 shadow-sm'
+                          ? 'bg-sky-50/70 border-sky-500/80 shadow-sm ring-1 ring-sky-300'
                           : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
                       }`}
                     >
-                      <div className={`p-2 rounded-lg bg-slate-50 border border-slate-100 ${tpl.accent}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-xs font-bold block text-slate-800">{tpl.label}</span>
-                        <span className="text-[10px] text-slate-500 leading-normal">{tpl.desc}</span>
+                      {presetModel ? (
+                        <AircraftThumbnail model={presetModel} width={42} height={42} />
+                      ) : (
+                        <div className={`p-2 rounded-lg bg-slate-50 border border-slate-100 ${tpl.accent}`}>
+                          <FileCode className="w-4 h-4" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold block text-slate-800 truncate">{tpl.label}</span>
+                        <span className="text-[10px] text-slate-500 leading-normal block truncate">{tpl.desc}</span>
                       </div>
                     </div>
                   );
@@ -303,11 +309,9 @@ export function Dashboard() {
                     className="group bg-white border border-slate-200 hover:border-sky-500/60 rounded-xl p-4 cursor-pointer transition flex flex-col justify-between gap-4 hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 rounded-lg bg-sky-50 text-sky-600 border border-sky-100">
-                          <Plane className="w-4 h-4" />
-                        </div>
-                        <div>
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        <AircraftThumbnail model={file.model} width={56} height={56} />
+                        <div className="min-w-0 flex-1">
                           {renamingFileId === file.id ? (
                             <input
                               ref={renameInputRef}
@@ -543,10 +547,8 @@ export function Dashboard() {
                       key={file.id}
                       className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between gap-3 shadow-inner"
                     >
-                      <div className="flex items-start gap-2.5">
-                        <div className="p-2 rounded-lg bg-slate-200/50 text-slate-600 border border-slate-200">
-                          <Plane className="w-4 h-4" />
-                        </div>
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        <AircraftThumbnail model={file.model} width={44} height={44} />
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-bold text-slate-800 block truncate" title={file.name}>
                             {file.name}
