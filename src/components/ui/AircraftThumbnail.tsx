@@ -12,7 +12,8 @@ interface AircraftThumbnailProps {
 
 /**
  * High-performance vector SVG CAD top-view planform preview thumbnail component.
- * Dynamically renders the exact parametric fuselage, swept wings, winglets, tails, and engine nacelles.
+ * Accurately aligns the 3D aviation coordinate space (nose at -L/2, tail at +L/2)
+ * to render precise 2D top-view planform thumbnails for any parametric aircraft model.
  */
 export function AircraftThumbnail({
   model,
@@ -26,34 +27,58 @@ export function AircraftThumbnail({
   const cx = viewBoxSize / 2;
   const cy = viewBoxSize / 2;
 
-  // 1. Calculate Bounding Box of Aircraft Model
+  // Fuselage bounds: nose is at -L/2, tail is at +L/2
   const fus = model.fuselage;
   const fusLen = fus ? fus.length : 10;
   const fusRadius = fus ? fus.radius : 1.5;
 
-  let minX = -fusLen * 0.1;
-  let maxX = fusLen * 1.1;
-  let maxYSpan = fusRadius * 2;
+  const noseX = -fusLen / 2;
+  const tailX = fusLen / 2;
 
+  let minX = noseX - fusLen * 0.05;
+  let maxX = tailX + fusLen * 0.05;
+  let maxYSpan = fusRadius * 2.2;
+
+  // Calculate wing planform extents
   if (model.wings && model.wings.length > 0) {
     for (const w of model.wings) {
       const halfSpan = w.span / 2;
       maxYSpan = Math.max(maxYSpan, halfSpan * 1.15);
 
-      const rootX = w.rootPos[0];
       const sweepRad = ((w.sweep || 0) * Math.PI) / 180;
-      const tipX = rootX + halfSpan * Math.tan(sweepRad) + w.tipChord;
-      maxX = Math.max(maxX, tipX * 1.05);
-      minX = Math.min(minX, rootX - 0.5);
+      const rootX_LE = w.rootPos[0];
+      const rootX_TE = rootX_LE + w.rootChord;
+      const tipX_LE = rootX_LE + halfSpan * Math.tan(sweepRad);
+      const tipX_TE = tipX_LE + w.tipChord;
+
+      minX = Math.min(minX, rootX_LE, tipX_LE);
+      maxX = Math.max(maxX, rootX_TE, tipX_TE);
     }
   }
 
+  // Calculate tail planform extents
   if (model.tails && model.tails.length > 0) {
     for (const t of model.tails) {
-      const posX = t.position[0];
       const hSpan = (t.horizontalSpan || 3) / 2;
       maxYSpan = Math.max(maxYSpan, hSpan * 1.1);
-      maxX = Math.max(maxX, posX + (t.horizontalChord || 2) * 1.2);
+
+      const sweepRad = ((t.sweep || t.horizontalSweep || 0) * Math.PI) / 180;
+      const rootX_LE = t.position[0];
+      const rootX_TE = rootX_LE + (t.horizontalChord || 2);
+      const tipX_LE = rootX_LE + hSpan * Math.tan(sweepRad);
+      const tipX_TE = tipX_LE + (t.horizontalTipChord || (t.horizontalChord || 2) * 0.6);
+
+      minX = Math.min(minX, rootX_LE, tipX_LE);
+      maxX = Math.max(maxX, rootX_TE, tipX_TE);
+    }
+  }
+
+  // Calculate engine extents
+  if (model.engines && model.engines.length > 0) {
+    for (const eng of model.engines) {
+      minX = Math.min(minX, eng.position[0]);
+      maxX = Math.max(maxX, eng.position[0] + eng.length);
+      maxYSpan = Math.max(maxYSpan, Math.abs(eng.position[1]) + eng.diameter);
     }
   }
 
@@ -61,10 +86,9 @@ export function AircraftThumbnail({
   const modelWidth = Math.max(1, maxYSpan * 2);
   const maxDim = Math.max(modelLength, modelWidth);
 
-  // Scaling factor to fit within 100px padding
+  // Scaling factor to fit nicely inside viewBox padding
   const scale = (viewBoxSize * 0.78) / maxDim;
 
-  // Center aircraft in SVG canvas
   const midX = (minX + maxX) / 2;
   const toSvgX = (x: number) => cx + (x - midX) * scale;
   const toSvgY = (y: number) => cy + y * scale;
@@ -183,8 +207,8 @@ export function AircraftThumbnail({
                     <line
                       x1={txLE}
                       y1={ryStarboard}
-                      x2={txTE + scale * 0.4}
-                      y2={ryStarboard + scale * 0.3}
+                      x2={txTE + scale * 0.3}
+                      y2={ryStarboard + scale * 0.25}
                       stroke="#38BDF8"
                       strokeWidth="1.5"
                       strokeLinecap="round"
@@ -192,8 +216,8 @@ export function AircraftThumbnail({
                     <line
                       x1={txLE}
                       y1={ryPort}
-                      x2={txTE + scale * 0.4}
-                      y2={ryPort - scale * 0.3}
+                      x2={txTE + scale * 0.3}
+                      y2={ryPort - scale * 0.25}
                       stroke="#38BDF8"
                       strokeWidth="1.5"
                       strokeLinecap="round"
@@ -270,17 +294,17 @@ export function AircraftThumbnail({
         {/* --- 4. FUSELAGE OUTLINE & SECTIONS --- */}
         {fus && (
           <g>
-            {/* Smooth Fuselage Contour */}
+            {/* Smooth Fuselage Contour centered from nose (-L/2) to tail (+L/2) */}
             {(() => {
-              const noseX = toSvgX(0);
-              const tailX = toSvgX(fusLen);
+              const svgNoseX = toSvgX(noseX);
+              const svgTailX = toSvgX(tailX);
               const maxR = fusRadius * scale;
 
               const fusPath = `
-                M ${noseX} ${cy}
-                C ${toSvgX(fusLen * 0.15)} ${cy - maxR * 1.05}, ${toSvgX(fusLen * 0.6)} ${cy - maxR}, ${tailX} ${cy - maxR * (fus.tail || 0.3)}
-                L ${tailX} ${cy + maxR * (fus.tail || 0.3)}
-                C ${toSvgX(fusLen * 0.6)} ${cy + maxR}, ${toSvgX(fusLen * 0.15)} ${cy + maxR * 1.05}, ${noseX} ${cy}
+                M ${svgNoseX} ${cy}
+                C ${toSvgX(noseX + fusLen * 0.15)} ${cy - maxR * 1.05}, ${toSvgX(noseX + fusLen * 0.6)} ${cy - maxR}, ${svgTailX} ${cy - maxR * (fus.tail || 0.3)}
+                L ${svgTailX} ${cy + maxR * (fus.tail || 0.3)}
+                C ${toSvgX(noseX + fusLen * 0.6)} ${cy + maxR}, ${toSvgX(noseX + fusLen * 0.15)} ${cy + maxR * 1.05}, ${svgNoseX} ${cy}
                 Z
               `;
 
@@ -297,7 +321,7 @@ export function AircraftThumbnail({
 
             {/* Nose Tip Indicator */}
             <circle
-              cx={toSvgX(0)}
+              cx={toSvgX(noseX)}
               cy={cy}
               r="1.8"
               fill="#38BDF8"
