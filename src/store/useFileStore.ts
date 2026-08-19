@@ -367,14 +367,17 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     set({
       driveAccessToken: null,
       driveEmail: null,
-      drivePassphrase: null,
       isSyncing: false,
       deletedDriveIds: [],
     });
     localStorage.removeItem('aerocad_drive_token');
     localStorage.removeItem('aerocad_drive_email');
-    localStorage.removeItem('aerocad_drive_passphrase');
     localStorage.removeItem('aerocad_deleted_drive_ids');
+  },
+
+  resetPassphrase: () => {
+    set({ drivePassphrase: null });
+    localStorage.removeItem('aerocad_drive_passphrase');
   },
 
   setDrivePassphrase: async (passphrase) => {

@@ -149,9 +149,16 @@ export function Dashboard() {
                 </span>
               )}
               <button
+                onClick={() => setIsPasswordModalOpen(true)}
+                className="ml-1 p-1 text-slate-400 hover:text-sky-600 rounded transition"
+                title="Passcode Settings / Change Passphrase"
+              >
+                <Key className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={disconnectDrive}
-                className="ml-2 p-1 text-slate-400 hover:text-red-500 rounded transition"
-                title="Disconnect Google Drive"
+                className="p-1 text-slate-400 hover:text-red-500 rounded transition"
+                title="Disconnect Google Drive (Passcode remains saved on this device)"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
@@ -417,15 +424,28 @@ export function Dashboard() {
             {/* Background Accent glow */}
             <div className="absolute -top-12 -right-12 w-24 h-24 bg-sky-50 rounded-full blur-2xl pointer-events-none" />
 
+            {drivePassphrase && (
+              <button
+                onClick={() => setIsPasswordModalOpen(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 font-bold text-sm"
+              >
+                ✕
+              </button>
+            )}
+
             <div className="text-center space-y-2.5">
               <div className="w-12 h-12 bg-sky-50 border border-sky-100 text-sky-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
                 <Key className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-slate-800">Setup Cloud Encryption Passphrase</h3>
-              <p className="text-xs text-slate-505 leading-relaxed max-w-sm mx-auto">
-                Enter a secret passphrase. This key remains entirely in your browser and is used to decrypt your cloud designs.
+              <h3 className="text-lg font-bold text-slate-800">
+                {drivePassphrase ? 'Update Encryption Passphrase' : 'Setup Cloud Encryption Passphrase'}
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-sm mx-auto">
+                {drivePassphrase
+                  ? 'Your encryption passcode is currently saved on this device. You can update your passcode below.'
+                  : 'Enter a secret passcode for AES-256 client-side encryption. This passcode is saved locally on your device so logging out and in will automatically remember it.'}
                 <span className="block mt-1 font-semibold text-amber-600">
-                  ⚠️ Google and AeroCAD do not store this passphrase. If lost, your cloud files cannot be recovered.
+                  ⚠️ Google and AeroCAD do not store this passcode. If lost, your cloud files cannot be recovered.
                 </span>
               </p>
             </div>
@@ -462,13 +482,24 @@ export function Dashboard() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow flex items-center justify-center gap-2 active:translate-y-[1px]"
-              >
-                <Lock className="w-4 h-4 text-white" />
-                <span>Initialize Encrypted Sync</span>
-              </button>
+              <div className="flex gap-2 pt-1">
+                {drivePassphrase && (
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2.5 px-4 rounded-xl text-sm transition"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="flex-1 bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 px-4 rounded-xl text-sm transition shadow flex items-center justify-center gap-2 active:translate-y-[1px]"
+                >
+                  <Lock className="w-4 h-4 text-white" />
+                  <span>{drivePassphrase ? 'Save Passphrase' : 'Initialize Encrypted Sync'}</span>
+                </button>
+              </div>
             </form>
           </div>
         </div>
