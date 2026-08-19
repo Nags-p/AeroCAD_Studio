@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { TopToolbar } from '@/components/ui/TopToolbar';
 import { LeftSidebar } from '@/components/ui/LeftSidebar';
@@ -12,6 +12,9 @@ import { AirfoilLibrary } from '@/components/ui/AirfoilLibrary';
 import { PresetSelector } from '@/components/ui/PresetSelector';
 import { MeasurementsPanel } from '@/components/ui/MeasurementsPanel';
 import { ExportImportModal } from '@/components/ui/ExportImportModal';
+import { Dashboard } from '@/components/ui/Dashboard';
+import { useUIStore } from '@/store/useUIStore';
+import { useFileStore } from '@/store/useFileStore';
 
 // Dynamically import Three.js Viewport to avoid SSR window issues
 const Viewport = dynamic(() => import('@/components/cad/Viewport').then((mod) => mod.Viewport), {
@@ -24,6 +27,17 @@ const Viewport = dynamic(() => import('@/components/cad/Viewport').then((mod) =>
 });
 
 export default function AeroCADStudio() {
+  const currentView = useUIStore((state) => state.currentView);
+  const loadFiles = useFileStore((state) => state.loadFiles);
+
+  useEffect(() => {
+    loadFiles();
+  }, [loadFiles]);
+
+  if (currentView === 'dashboard') {
+    return <Dashboard />;
+  }
+
   return (
     <main className="w-screen h-screen flex flex-col bg-cad-bg overflow-hidden relative select-none">
       {/* Top Application Toolbar */}

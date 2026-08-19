@@ -12,10 +12,13 @@ import {
   Sliders,
   Sparkles,
   Library,
-  ChevronDown
+  ChevronDown,
+  Home,
+  Check
 } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
+import { useFileStore } from '@/store/useFileStore';
 
 export function TopToolbar() {
   const model = useAircraftStore((state) => state.model);
@@ -31,6 +34,11 @@ export function TopToolbar() {
   const units = useUIStore((state) => state.units);
   const setUnits = useUIStore((state) => state.setUnits);
   const openModal = useUIStore((state) => state.openModal);
+  const setView = useUIStore((state) => state.setView);
+
+  const activeFileId = useFileStore((state) => state.activeFileId);
+  const files = useFileStore((state) => state.files);
+  const activeFile = files.find((f) => f.id === activeFileId);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -41,12 +49,32 @@ export function TopToolbar() {
   return (
     <header className="h-12 bg-white border-b border-slate-200 px-4 flex items-center justify-between select-none z-30 relative shadow-sm">
       {/* Left: Brand Logo & Title */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setView('dashboard')}
+          className="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-500 hover:text-slate-950 flex items-center gap-1 border border-slate-200 shadow-sm"
+          title="Back to Files Dashboard"
+        >
+          <Home className="w-4 h-4" />
+        </button>
+
         <div className="flex items-center gap-2 bg-sky-600 px-2.5 py-1 rounded text-white font-bold text-sm shadow">
           <Plane className="w-4 h-4 text-white stroke-[2.5]" />
           <span>AeroCAD</span>
-          <span className="text-[10px] uppercase font-mono px-1 py-0.2 bg-white/20 rounded text-white">PRO</span>
         </div>
+
+        <span className="text-slate-300">/</span>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 max-w-[150px] truncate" title={activeFile ? activeFile.name : model.name || 'Temporary Design'}>
+            {activeFile ? activeFile.name : model.name || 'Temporary Design'}
+          </span>
+          <span className="text-[9px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5 font-mono select-none">
+            <Check className="w-3 h-3 text-emerald-500" /> Saved
+          </span>
+        </div>
+
+        <div className="w-px h-5 bg-slate-200 mx-1" />
 
         {/* Menu Bar Dropdowns */}
         <nav className="flex items-center gap-1 text-xs text-slate-700 font-medium relative">
@@ -103,12 +131,27 @@ export function TopToolbar() {
                 >
                   <Plus className="w-3.5 h-3.5 text-sky-600" /> Fuselage Section
                 </button>
-                <button
-                  onClick={() => { addWing(); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
-                >
-                  <Plus className="w-3.5 h-3.5 text-emerald-600" /> Auxiliary Wing / Canard
-                </button>
+                <div className="py-1 border-y border-slate-100 my-0.5">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Add Wing</div>
+                  <button
+                    onClick={() => { addWing('high'); setActiveDropdown(null); }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-600" /> High Wing (Cargo/Bush)
+                  </button>
+                  <button
+                    onClick={() => { addWing('mid'); setActiveDropdown(null); }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-600" /> Mid Wing (Fighter/Canard)
+                  </button>
+                  <button
+                    onClick={() => { addWing('low'); setActiveDropdown(null); }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-emerald-600" /> Low Wing (Airliner/GA)
+                  </button>
+                </div>
                 <button
                   onClick={() => { addTail(); setActiveDropdown(null); }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"

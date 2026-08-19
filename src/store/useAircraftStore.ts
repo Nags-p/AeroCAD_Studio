@@ -1,25 +1,25 @@
 import { create } from 'zustand';
-import { AircraftModel, FuselageSection, WingComponent, TailComponent, EngineComponent, GearComponent } from '@/types/aircraft';
+import { AircraftModel, FuselageSection, WingComponent, TailComponent, EngineComponent } from '@/types/aircraft';
 import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 
 interface AircraftStoreState {
   model: AircraftModel;
   selectedId: string | null;
-  selectedType: 'fuselage' | 'section' | 'wing' | 'tail' | 'engine' | 'gear' | null;
+  selectedType: 'fuselage' | 'section' | 'wing' | 'tail' | 'engine' | null;
 
   // History stack for Undo/Redo
   history: AircraftModel[];
   historyIndex: number;
 
   // Actions
-  setSelected: (id: string | null, type: 'fuselage' | 'section' | 'wing' | 'tail' | 'engine' | 'gear' | null) => void;
+  setSelected: (id: string | null, type: 'fuselage' | 'section' | 'wing' | 'tail' | 'engine' | null) => void;
   updateFuselage: (params: Partial<AircraftModel['fuselage']>) => void;
   updateFuselageSection: (sectionId: string, params: Partial<FuselageSection>) => void;
   addFuselageSection: () => void;
   deleteFuselageSection: (sectionId: string) => void;
 
   updateWing: (wingId: string, params: Partial<WingComponent>) => void;
-  addWing: () => void;
+  addWing: (config?: 'low' | 'mid' | 'high' | 'custom') => void;
   deleteWing: (wingId: string) => void;
 
   updateTail: (tailId: string, params: Partial<TailComponent>) => void;
@@ -29,8 +29,6 @@ interface AircraftStoreState {
   updateEngine: (engineId: string, params: Partial<EngineComponent>) => void;
   addEngine: () => void;
   deleteEngine: (engineId: string) => void;
-
-  updateGear: (params: Partial<GearComponent>) => void;
 
   toggleComponentVisibility: (id: string) => void;
   toggleComponentLock: (id: string) => void;
@@ -124,29 +122,65 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
 
     updateWing: (wingId, params) => {
       const model = get().model;
+      const oldWing = model.wings.find((w) => w.id === wingId);
       const wings = model.wings.map((w) => (w.id === wingId ? { ...w, ...params } : w));
-      pushState({ ...model, wings });
+
+      let engines = model.engines;
+      if (oldWing && params.rootPos) {
+        const deltaX = params.rootPos[0] - oldWing.rootPos[0];
+        const deltaY = params.rootPos[1] - oldWing.rootPos[1];
+        if (deltaX !== 0 || deltaY !== 0) {
+          engines = engines.map((eng) => {
+            const isAttached = eng.attachToWing !== false && (eng.parentWingId === wingId || (!eng.parentWingId && model.wings[0]?.id === wingId));
+            if (isAttached) {
+              return {
+                ...eng,
+                position: [eng.position[0] + deltaX, eng.position[1] + deltaY, eng.position[2]],
+              };
+            }
+            return eng;
+          });
+        }
+      }
+
+      pushState({ ...model, wings, engines });
     },
 
-    addWing: () => {
+    addWing: (config = 'mid') => {
       const model = get().model;
+      const fusRadius = model.fuselage?.radius || 1.8;
+      let zPos = 0;
+      let dihedral = 1.0;
+      let label = 'Mid';
+
+      if (config === 'high') {
+        zPos = fusRadius * 0.75;
+        dihedral = 0.0;
+        label = 'High';
+      } else if (config === 'low') {
+        zPos = -fusRadius * 0.45;
+        dihedral = 3.5;
+        label = 'Low';
+      }
+
       const newWing: WingComponent = {
         id: `wing-${Date.now()}`,
-        name: `Auxiliary Wing ${model.wings.length + 1}`,
+        name: `${label} Wing ${model.wings.length + 1}`,
         visible: true,
         locked: false,
+        mountConfig: config,
         span: 12.0,
         rootChord: 2.5,
         tipChord: 1.0,
         sweep: 15,
-        dihedral: 2,
+        dihedral,
         twist: 0,
         rootThickness: 10,
         tipThickness: 8,
         rootCamber: 1,
         tipCamber: 0,
         airfoilName: 'NACA 0012',
-        rootPos: [0, 0, 0],
+        rootPos: [0, 0, zPos],
         color: '#0284C7',
         winglets: { enabled: false, height: 1.0, root: 0.8, tip: 0.3, sweep: 30.0, cant: 15.0, filletRadius: 0.5 },
       };
@@ -203,6 +237,9 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
 
     addEngine: () => {
       const model = get().model;
+      const wing = model.wings[0];
+      const spanY = wing ? wing.rootPos[1] + (wing.span / 2) * 0.35 : 3.0;
+      const rootX = wing ? wing.rootPos[0] + wing.rootChord * 0.4 : 1.0;
       const newEngine: EngineComponent = {
         id: `eng-${Date.now()}`,
         name: `Engine Nacelle ${model.engines.length + 1}`,
@@ -211,10 +248,13 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         type: 'turbofan',
         diameter: 1.4,
         length: 3.0,
-        position: [1.0, 3.0, -0.8],
-        pylonHeight: 0.5,
+        position: [rootX, spanY, -0.8],
+        pylonHeight: 0.45,
         pylonWidth: 0.2,
         fanBlades: 16,
+        attachToWing: true,
+        parentWingId: wing ? wing.id : undefined,
+        mountStyle: 'underwing',
         color: '#475569',
       };
       const engines = [...model.engines, newEngine];
@@ -228,14 +268,6 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       pushState({ ...model, engines });
     },
 
-    updateGear: (params) => {
-      const model = get().model;
-      pushState({
-        ...model,
-        gear: { ...model.gear, ...params },
-      });
-    },
-
     toggleComponentVisibility: (id) => {
       const model = get().model;
       const newModel: AircraftModel = { ...model };
@@ -246,9 +278,6 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       newModel.wings = newModel.wings.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w));
       newModel.tails = newModel.tails.map((t) => (t.id === id ? { ...t, visible: !t.visible } : t));
       newModel.engines = newModel.engines.map((e) => (e.id === id ? { ...e, visible: !e.visible } : e));
-      if (newModel.gear.id === id) {
-        newModel.gear.visible = !newModel.gear.visible;
-      }
 
       pushState(newModel);
     },
@@ -263,9 +292,6 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       newModel.wings = newModel.wings.map((w) => (w.id === id ? { ...w, locked: !w.locked } : w));
       newModel.tails = newModel.tails.map((t) => (t.id === id ? { ...t, locked: !t.locked } : t));
       newModel.engines = newModel.engines.map((e) => (e.id === id ? { ...e, locked: !e.locked } : e));
-      if (newModel.gear.id === id) {
-        newModel.gear.locked = !newModel.gear.locked;
-      }
 
       pushState(newModel);
     },

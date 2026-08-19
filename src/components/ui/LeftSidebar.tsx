@@ -47,7 +47,6 @@ export function LeftSidebar() {
     wings: true,
     tails: true,
     engines: true,
-    gear: true,
   });
 
   const toggleNode = (node: string) => {
@@ -203,7 +202,12 @@ export function LeftSidebar() {
                   selectedId === w.id ? 'bg-sky-100 text-sky-900 font-semibold border-l-2 border-sky-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                <span>{w.name}</span>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="truncate">{w.name}</span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-100 text-slate-500 font-mono font-bold uppercase border border-slate-200">
+                    {w.mountConfig || (w.rootPos[2] > 0.3 ? 'HIGH' : w.rootPos[2] < -0.2 ? 'LOW' : 'MID')}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={(e) => {
@@ -317,7 +321,12 @@ export function LeftSidebar() {
                   selectedId === eng.id ? 'bg-sky-100 text-sky-900 font-semibold border-l-2 border-sky-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                 }`}
               >
-                <span>{eng.name}</span>
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="truncate">{eng.name}</span>
+                  <span className="text-[9px] px-1 py-0.2 rounded bg-purple-100 text-purple-700 font-mono font-bold uppercase border border-purple-200">
+                    {eng.attachToWing !== false && model.wings.length > 0 ? 'WING MOUNTED' : 'FUSELAGE'}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={(e) => {
@@ -346,30 +355,7 @@ export function LeftSidebar() {
           </div>
         </div>
 
-        {/* 5. Landing Gear Tree */}
-        <div className="rounded border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div
-            onClick={() => setSelected(model.gear.id, 'gear')}
-            className={`flex items-center justify-between p-2 cursor-pointer transition ${
-              selectedId === model.gear.id ? 'bg-sky-100 text-sky-900 font-semibold border-l-2 border-sky-600' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Settings className="w-3.5 h-3.5 text-slate-500" />
-              <span>{model.gear.name}</span>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleVisibility(model.gear.id);
-              }}
-              className="p-1 text-slate-400 hover:text-slate-700"
-              title="Toggle Visibility"
-            >
-              {model.gear.visible ? <Eye className="w-3 h-3 text-slate-600" /> : <EyeOff className="w-3 h-3 text-red-500" />}
-            </button>
-          </div>
-        </div>
+
       </div>
     </aside>
   );

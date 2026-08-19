@@ -4,11 +4,19 @@ import { generateWingGeometry } from './wingGenerator';
 
 /**
  * Builds standard 3D BufferGeometry for Tail configurations (Conventional, V-Tail, T-Tail, Twin-Tail, Canard).
+ * Now uses independent horizontalSweep / verticalSweep when available, falling back to shared `sweep`.
  */
 export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry {
   if (!tail || !tail.visible) return new THREE.BufferGeometry();
 
   const pos = tail.position;
+  const hSweep = tail.horizontalSweep ?? tail.sweep;
+  const vSweep = tail.verticalSweep ?? tail.sweep;
+  const hTipChord = tail.horizontalTipChord ?? tail.horizontalChord * 0.6;
+  const vTipChord = tail.verticalTipChord ?? tail.verticalChord * 0.6;
+
+  // Helper to create a default disabled winglet config
+  const noWinglets = () => ({ enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 });
 
   // Convert Tail configuration into parametric Wing components and invoke wing generator
   if (tail.type === 'v-tail') {
@@ -19,8 +27,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       locked: false,
       span: tail.horizontalSpan,
       rootChord: tail.horizontalChord,
-      tipChord: tail.horizontalChord * 0.6,
-      sweep: tail.sweep,
+      tipChord: hTipChord,
+      sweep: hSweep,
       dihedral: tail.dihedral > 0 ? tail.dihedral : 35, // Dihedral angle for V-tail fins
       twist: 0,
       rootThickness: 10,
@@ -30,7 +38,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+      winglets: noWinglets(),
     };
     return generateWingGeometry(vWing);
   }
@@ -44,8 +52,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       locked: false,
       span: tail.verticalHeight * 2,
       rootChord: tail.verticalChord,
-      tipChord: tail.verticalChord * 0.7,
-      sweep: tail.sweep,
+      tipChord: vTipChord,
+      sweep: vSweep,
       dihedral: 90, // vertical standing
       twist: 0,
       rootThickness: 12,
@@ -55,12 +63,12 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0012',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+      winglets: noWinglets(),
     };
 
     // Top horizontal tail mounted at top of vertical fin
     const topPos: [number, number, number] = [
-      pos[0] + tail.verticalHeight * Math.tan((tail.sweep * Math.PI) / 180),
+      pos[0] + tail.verticalHeight * Math.tan((vSweep * Math.PI) / 180),
       pos[1],
       pos[2] + tail.verticalHeight,
     ];
@@ -72,8 +80,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       locked: false,
       span: tail.horizontalSpan,
       rootChord: tail.horizontalChord,
-      tipChord: tail.horizontalChord * 0.65,
-      sweep: tail.sweep * 0.7,
+      tipChord: hTipChord,
+      sweep: hSweep * 0.7,
       dihedral: 0,
       twist: 0,
       rootThickness: 10,
@@ -83,7 +91,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0009',
       rootPos: topPos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+      winglets: noWinglets(),
     };
 
     return mergeGeometries([generateWingGeometry(vertWing), generateWingGeometry(horizWing)]);
@@ -98,8 +106,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       locked: false,
       span: tail.horizontalSpan,
       rootChord: tail.horizontalChord,
-      tipChord: tail.horizontalChord * 0.8,
-      sweep: tail.sweep * 0.5,
+      tipChord: hTipChord,
+      sweep: hSweep * 0.5,
       dihedral: 0,
       twist: 0,
       rootThickness: 10,
@@ -109,7 +117,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: pos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+      winglets: noWinglets(),
     };
 
     // Left & right twin vertical fins mounted on horizontal tips
@@ -124,8 +132,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       locked: false,
       span: tail.verticalHeight * 2,
       rootChord: tail.verticalChord,
-      tipChord: tail.verticalChord * 0.6,
-      sweep: tail.sweep,
+      tipChord: vTipChord,
+      sweep: vSweep,
       dihedral: 90,
       twist: 0,
       rootThickness: 10,
@@ -135,7 +143,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       airfoilName: 'NACA 0010',
       rootPos: finRightPos,
       color: tail.color,
-      winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+      winglets: noWinglets(),
     };
 
     const lFin: WingComponent = { ...rFin, id: tail.id + '_lf', rootPos: finLeftPos };
@@ -155,8 +163,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     locked: false,
     span: tail.horizontalSpan,
     rootChord: tail.horizontalChord,
-    tipChord: tail.horizontalChord * 0.6,
-    sweep: tail.sweep,
+    tipChord: hTipChord,
+    sweep: hSweep,
     dihedral: tail.dihedral,
     twist: 0,
     rootThickness: 10,
@@ -166,7 +174,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     airfoilName: 'NACA 0009',
     rootPos: pos,
     color: tail.color,
-    winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+    winglets: noWinglets(),
   };
 
   const vert: WingComponent = {
@@ -176,8 +184,8 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     locked: false,
     span: tail.verticalHeight * 2,
     rootChord: tail.verticalChord,
-    tipChord: tail.verticalChord * 0.6,
-    sweep: tail.sweep + 5,
+    tipChord: vTipChord,
+    sweep: vSweep + 5,
     dihedral: 90,
     twist: 0,
     rootThickness: 12,
@@ -187,7 +195,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     airfoilName: 'NACA 0012',
     rootPos: pos,
     color: tail.color,
-    winglets: { enabled: false, height: 0, root: 0, tip: 0, sweep: 0, cant: 0, filletRadius: 0 },
+    winglets: noWinglets(),
   };
 
   return mergeGeometries([generateWingGeometry(horiz), generateWingGeometry(vert)]);

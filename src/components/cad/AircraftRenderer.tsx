@@ -9,7 +9,6 @@ import { generateFuselageGeometry, resolveStationPositions } from '@/engine/gene
 import { generateWingGeometry } from '@/engine/generators/wingGenerator';
 import { generateTailGeometry } from '@/engine/generators/tailGenerator';
 import { generateEngineGeometry } from '@/engine/generators/engineGenerator';
-import { generateGearGeometry } from '@/engine/generators/gearGenerator';
 import { calculateAeroMetrics } from '@/engine/math/aeroMetrics';
 
 /**
@@ -154,12 +153,8 @@ export function AircraftRenderer() {
   const engineGeos = useMemo(() => {
     return model.engines
       .filter((e) => e.visible)
-      .map((e) => ({ id: e.id, color: e.color, geo: generateEngineGeometry(e) }));
-  }, [model.engines]);
-
-  const gearGeo = useMemo(() => {
-    return model.gear && model.gear.visible ? generateGearGeometry(model.gear) : null;
-  }, [model.gear]);
+      .map((e) => ({ id: e.id, color: e.color, geo: generateEngineGeometry(e, model.wings) }));
+  }, [model.engines, model.wings]);
 
   const expFactor = explodedOffset * 4.0;
 
@@ -249,19 +244,7 @@ export function AircraftRenderer() {
         </group>
       ))}
 
-      {/* Landing Gear */}
-      {gearGeo ? (
-        <group position={[0, 0, -expFactor * 1.2]}>
-          <mesh
-            geometry={gearGeo}
-            material={getMaterial(model.gear.color, selectedType === 'gear' && selectedId === model.gear.id)}
-            onClick={(e: ThreeEvent<MouseEvent>) => {
-              e.stopPropagation();
-              setSelected(model.gear.id, 'gear');
-            }}
-          />
-        </group>
-      ) : null}
+
 
       {/* Center of Gravity (CG) Marker Sphere */}
       {showCG && aeroMetrics.centerOfGravity ? (

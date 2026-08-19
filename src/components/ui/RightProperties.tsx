@@ -315,7 +315,6 @@ export function RightProperties() {
   const updateWing = useAircraftStore((state) => state.updateWing);
   const updateTail = useAircraftStore((state) => state.updateTail);
   const updateEngine = useAircraftStore((state) => state.updateEngine);
-  const updateGear = useAircraftStore((state) => state.updateGear);
 
   const units = useUIStore((state) => state.units);
   const unitFactor = units === 'imperial' ? 3.28084 : 1.0;
@@ -340,8 +339,6 @@ export function RightProperties() {
   const activeEngine = selectedType === 'engine'
     ? model.engines.find((e) => e.id === selectedId) || model.engines[0]
     : null;
-
-  const activeGear = selectedType === 'gear' ? model.gear : null;
 
   return (
     <aside className="w-80 h-[calc(100vh-3rem-1.75rem)] bg-white border-l border-slate-200 flex flex-col select-none shadow-sm z-20 overflow-y-auto">
@@ -724,6 +721,101 @@ export function RightProperties() {
               onChange={(val) => updateWing(activeWing.id, { dihedral: val })}
             />
 
+            {/* Wing Mounting Configuration (High, Mid, Low Wing) */}
+            <div className="space-y-1.5 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200">
+              <label className="text-emerald-900 font-bold text-[11px] uppercase tracking-wider block flex items-center justify-between">
+                <span>Wing Mounting Configuration</span>
+                <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-300">
+                  {(() => {
+                  const currentZ = activeWing.rootPos[2];
+                  const activeMount = activeWing.mountConfig || (currentZ > 0.3 ? 'high' : currentZ < -0.2 ? 'low' : 'mid');
+                  return activeMount.toUpperCase();
+                })()}
+                </span>
+              </label>
+
+              {/* Quick Preset Selector Buttons */}
+              <div className="grid grid-cols-4 gap-1 pt-1">
+                {[
+                  {
+                    id: 'low',
+                    label: 'Low Wing',
+                    desc: 'Bottom mount (Airliner/GA)',
+                    zTarget: -Math.max(0.4, (model.fuselage?.radius || 1.8) * 0.45),
+                    suggestedDihedral: 3.5,
+                  },
+                  {
+                    id: 'mid',
+                    label: 'Mid Wing',
+                    desc: 'Fuselage centerline (Fighter)',
+                    zTarget: 0.0,
+                    suggestedDihedral: 1.0,
+                  },
+                  {
+                    id: 'high',
+                    label: 'High Wing',
+                    desc: 'Top mount (Cargo/Bush)',
+                    zTarget: Math.max(0.5, (model.fuselage?.radius || 1.8) * 0.75),
+                    suggestedDihedral: 0.0,
+                  },
+                  {
+                    id: 'custom',
+                    label: 'Custom',
+                    desc: 'Manual height offset',
+                    zTarget: activeWing.rootPos[2],
+                    suggestedDihedral: activeWing.dihedral,
+                  },
+                ].map((cfg) => {
+                  const currentZ = activeWing.rootPos[2];
+                  const activeMount = activeWing.mountConfig || (currentZ > 0.3 ? 'high' : currentZ < -0.2 ? 'low' : 'mid');
+                  const isActive = activeMount === cfg.id;
+
+                  return (
+                    <button
+                      key={cfg.id}
+                      type="button"
+                      onClick={() => {
+                        if (cfg.id === 'custom') {
+                          updateWing(activeWing.id, { mountConfig: 'custom' });
+                        } else {
+                          updateWing(activeWing.id, {
+                            mountConfig: cfg.id as any,
+                            rootPos: [activeWing.rootPos[0], activeWing.rootPos[1], cfg.zTarget],
+                          });
+                        }
+                      }}
+                      className={`px-1.5 py-1.5 rounded text-[10px] font-bold transition flex flex-col items-center justify-center text-center ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-500'
+                          : 'bg-white text-slate-700 hover:bg-emerald-100/50 border border-slate-200'
+                      }`}
+                      title={cfg.desc}
+                    >
+                      <span>{cfg.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Position Z (Mount Height) */}
+            <PropertyRow
+              label="Mount Height (Position Z)"
+              value={activeWing.rootPos[2]}
+              min={-10.0}
+              max={15.0}
+              step={0.05}
+              unitLabel={unitLabel}
+              unitFactor={unitFactor}
+              accentClass="accent-emerald-600"
+              onChange={(val) => {
+                updateWing(activeWing.id, {
+                  mountConfig: 'custom',
+                  rootPos: [activeWing.rootPos[0], activeWing.rootPos[1], val],
+                });
+              }}
+            />
+
             {/* Position X Offset */}
             <PropertyRow
               label="Position X Offset"
@@ -737,6 +829,23 @@ export function RightProperties() {
               onChange={(val) =>
                 updateWing(activeWing.id, {
                   rootPos: [val, activeWing.rootPos[1], activeWing.rootPos[2]],
+                })
+              }
+            />
+
+            {/* Position Y (Lateral) Offset */}
+            <PropertyRow
+              label="Lateral Offset (Position Y)"
+              value={activeWing.rootPos[1]}
+              min={-20.0}
+              max={20.0}
+              step={0.1}
+              unitLabel={unitLabel}
+              unitFactor={unitFactor}
+              accentClass="accent-emerald-600"
+              onChange={(val) =>
+                updateWing(activeWing.id, {
+                  rootPos: [activeWing.rootPos[0], val, activeWing.rootPos[2]],
                 })
               }
             />
@@ -830,68 +939,136 @@ export function RightProperties() {
               </select>
             </div>
 
-            {/* Horizontal Span */}
-            <PropertyRow
-              label="Horizontal Span"
-              value={activeTail.horizontalSpan}
-              min={0.5}
-              max={50.0}
-              step={0.2}
-              unitLabel={unitLabel}
-              unitFactor={unitFactor}
-              accentClass="accent-amber-600"
-              onChange={(val) => updateTail(activeTail.id, { horizontalSpan: val })}
-            />
+            {/* ── Horizontal Stabilizer ── */}
+            <div className="space-y-2 bg-amber-50/50 p-2.5 rounded-lg border border-amber-200">
+              <div className="font-bold text-[11px] text-amber-800 uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-amber-200">
+                <span className="w-2.5 h-0.5 bg-amber-600 rounded-full inline-block" />
+                Horizontal Stabilizer
+              </div>
 
-            {/* Horizontal Chord */}
-            <PropertyRow
-              label="Horizontal Chord"
-              value={activeTail.horizontalChord}
-              min={0.1}
-              max={15.0}
-              step={0.1}
-              unitLabel={unitLabel}
-              unitFactor={unitFactor}
-              accentClass="accent-amber-600"
-              onChange={(val) => updateTail(activeTail.id, { horizontalChord: val })}
-            />
+              {/* Horizontal Span */}
+              <PropertyRow
+                label="Span"
+                value={activeTail.horizontalSpan}
+                min={0.5}
+                max={50.0}
+                step={0.2}
+                unitLabel={unitLabel}
+                unitFactor={unitFactor}
+                accentClass="accent-amber-600"
+                onChange={(val) => updateTail(activeTail.id, { horizontalSpan: val })}
+              />
 
-            {/* Vertical Height */}
-            <PropertyRow
-              label="Vertical Fin Height"
-              value={activeTail.verticalHeight}
-              min={0.5}
-              max={25.0}
-              step={0.2}
-              unitLabel={unitLabel}
-              unitFactor={unitFactor}
-              accentClass="accent-amber-600"
-              onChange={(val) => updateTail(activeTail.id, { verticalHeight: val })}
-            />
+              {/* Horizontal Root Chord */}
+              <PropertyRow
+                label="Root Chord"
+                value={activeTail.horizontalChord}
+                min={0.1}
+                max={15.0}
+                step={0.1}
+                unitLabel={unitLabel}
+                unitFactor={unitFactor}
+                accentClass="accent-amber-600"
+                onChange={(val) => updateTail(activeTail.id, { horizontalChord: val })}
+              />
 
-            {/* Vertical Chord */}
-            <PropertyRow
-              label="Vertical Fin Chord"
-              value={activeTail.verticalChord}
-              min={0.1}
-              max={15.0}
-              step={0.1}
-              unitLabel={unitLabel}
-              unitFactor={unitFactor}
-              accentClass="accent-amber-600"
-              onChange={(val) => updateTail(activeTail.id, { verticalChord: val })}
-            />
+              {/* Horizontal Tip Chord */}
+              <PropertyRow
+                label="Tip Chord"
+                value={activeTail.horizontalTipChord ?? activeTail.horizontalChord * 0.6}
+                min={0.05}
+                max={10.0}
+                step={0.05}
+                unitLabel={unitLabel}
+                unitFactor={unitFactor}
+                accentClass="accent-amber-600"
+                onChange={(val) => updateTail(activeTail.id, { horizontalTipChord: val })}
+              />
 
-            {/* Sweep */}
-            <PropertyRow
-              label="Sweep Angle (deg)"
-              value={activeTail.sweep}
-              min={0}
-              max={75}
-              step={1}
-              accentClass="accent-amber-600"
-              onChange={(val) => updateTail(activeTail.id, { sweep: val })}
-            />
+              {/* Horizontal Sweep */}
+              <PropertyRow
+                label="Sweep (deg)"
+                value={activeTail.horizontalSweep ?? activeTail.sweep}
+                min={-10}
+                max={75}
+                step={1}
+                accentClass="accent-amber-600"
+                onChange={(val) => updateTail(activeTail.id, { horizontalSweep: val, sweep: val })}
+              />
+
+              {/* Dihedral (only relevant for horizontal) */}
+              {(activeTail.type === 'conventional' || activeTail.type === 'v-tail') && (
+                <PropertyRow
+                  label="Dihedral (deg)"
+                  value={activeTail.dihedral}
+                  min={-30}
+                  max={60}
+                  step={1}
+                  accentClass="accent-amber-600"
+                  onChange={(val) => updateTail(activeTail.id, { dihedral: val })}
+                />
+              )}
+            </div>
+
+            {/* ── Vertical Stabilizer ── */}
+            {activeTail.type !== 'v-tail' && activeTail.type !== 'canard' && (
+              <div className="space-y-2 bg-sky-50/50 p-2.5 rounded-lg border border-sky-200">
+                <div className="font-bold text-[11px] text-sky-800 uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-sky-200">
+                  <span className="w-0.5 h-2.5 bg-sky-600 rounded-full inline-block" />
+                  Vertical Stabilizer
+                </div>
+
+                {/* Vertical Height */}
+                <PropertyRow
+                  label="Fin Height"
+                  value={activeTail.verticalHeight}
+                  min={0.5}
+                  max={25.0}
+                  step={0.2}
+                  unitLabel={unitLabel}
+                  unitFactor={unitFactor}
+                  accentClass="accent-sky-600"
+                  onChange={(val) => updateTail(activeTail.id, { verticalHeight: val })}
+                />
+
+                {/* Vertical Root Chord */}
+                <PropertyRow
+                  label="Root Chord"
+                  value={activeTail.verticalChord}
+                  min={0.1}
+                  max={15.0}
+                  step={0.1}
+                  unitLabel={unitLabel}
+                  unitFactor={unitFactor}
+                  accentClass="accent-sky-600"
+                  onChange={(val) => updateTail(activeTail.id, { verticalChord: val })}
+                />
+
+                {/* Vertical Tip Chord */}
+                <PropertyRow
+                  label="Tip Chord"
+                  value={activeTail.verticalTipChord ?? activeTail.verticalChord * 0.6}
+                  min={0.05}
+                  max={10.0}
+                  step={0.05}
+                  unitLabel={unitLabel}
+                  unitFactor={unitFactor}
+                  accentClass="accent-sky-600"
+                  onChange={(val) => updateTail(activeTail.id, { verticalTipChord: val })}
+                />
+
+                {/* Vertical Sweep */}
+                <PropertyRow
+                  label="Sweep (deg)"
+                  value={activeTail.verticalSweep ?? activeTail.sweep + 5}
+                  min={0}
+                  max={80}
+                  step={1}
+                  accentClass="accent-sky-600"
+                  onChange={(val) => updateTail(activeTail.id, { verticalSweep: val })}
+                />
+              </div>
+            )}
 
             {/* Tail Position X Offset */}
             <PropertyRow
@@ -906,6 +1083,23 @@ export function RightProperties() {
               onChange={(val) =>
                 updateTail(activeTail.id, {
                   position: [val, activeTail.position[1], activeTail.position[2]],
+                })
+              }
+            />
+
+            {/* Tail Position Z (Vertical) Offset */}
+            <PropertyRow
+              label="Tail Position Z"
+              value={activeTail.position[2]}
+              min={-10.0}
+              max={15.0}
+              step={0.1}
+              unitLabel={unitLabel}
+              unitFactor={unitFactor}
+              accentClass="accent-amber-600"
+              onChange={(val) =>
+                updateTail(activeTail.id, {
+                  position: [activeTail.position[0], activeTail.position[1], val],
                 })
               }
             />
@@ -945,6 +1139,101 @@ export function RightProperties() {
               </select>
             </div>
 
+            {/* Engine Mounting Configuration (Wing Attachment vs Fuselage) */}
+            {model.wings.length > 0 && (
+              <div className="space-y-2 bg-purple-50/60 p-2.5 rounded-lg border border-purple-200">
+                <label className="text-purple-900 font-bold text-[11px] uppercase tracking-wider block flex items-center justify-between">
+                  <span>Wing Attachment</span>
+                  <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded border border-purple-300">
+                    {activeEngine.attachToWing !== false ? 'ATTACHED TO WING' : 'FUSELAGE'}
+                  </span>
+                </label>
+
+                {/* Parent Wing Selector (if multiple wings) */}
+                {model.wings.length > 1 && (
+                  <div className="space-y-1 pt-1">
+                    <label className="text-slate-600 text-[10px] font-medium block">Parent Wing Assembly</label>
+                    <select
+                      value={activeEngine.parentWingId || model.wings[0].id}
+                      onChange={(e) => updateEngine(activeEngine.id, { parentWingId: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded p-1 text-[11px] text-slate-800"
+                    >
+                      {model.wings.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstWing = model.wings[0];
+                      const currentY = activeEngine.position[1] !== 0 ? activeEngine.position[1] : (firstWing.span / 2) * 0.35;
+                      updateEngine(activeEngine.id, {
+                        attachToWing: true,
+                        position: [activeEngine.position[0], currentY, activeEngine.position[2]],
+                      });
+                    }}
+                    className={`px-2 py-1.5 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 text-center ${
+                      activeEngine.attachToWing !== false
+                        ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-500'
+                        : 'bg-white text-slate-700 hover:bg-purple-100/50 border border-slate-200'
+                    }`}
+                  >
+                    <span>✈️ Attached to Wing</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateEngine(activeEngine.id, {
+                        attachToWing: false,
+                        position: [activeEngine.position[0], 0, 0],
+                      });
+                    }}
+                    className={`px-2 py-1.5 rounded text-[10px] font-bold transition flex items-center justify-center gap-1 text-center ${
+                      activeEngine.attachToWing === false
+                        ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-500'
+                        : 'bg-white text-slate-700 hover:bg-purple-100/50 border border-slate-200'
+                    }`}
+                  >
+                    <span>🚀 Fuselage Free</span>
+                  </button>
+                </div>
+
+                {/* Stance: Underwing vs Overwing */}
+                {activeEngine.attachToWing !== false && (
+                  <div className="grid grid-cols-2 gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => updateEngine(activeEngine.id, { mountStyle: 'underwing' })}
+                      className={`px-2 py-1 rounded text-[10px] font-semibold transition ${
+                        (activeEngine.mountStyle || 'underwing') === 'underwing'
+                          ? 'bg-purple-100 text-purple-900 border border-purple-300 font-bold'
+                          : 'bg-white text-slate-600 border border-slate-200'
+                      }`}
+                    >
+                      Under-Wing Pylon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateEngine(activeEngine.id, { mountStyle: 'overwing' })}
+                      className={`px-2 py-1 rounded text-[10px] font-semibold transition ${
+                        activeEngine.mountStyle === 'overwing'
+                          ? 'bg-purple-100 text-purple-900 border border-purple-300 font-bold'
+                          : 'bg-white text-slate-600 border border-slate-200'
+                      }`}
+                    >
+                      Over-Wing Mount
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Diameter */}
             <PropertyRow
               label="Inlet Diameter"
@@ -971,9 +1260,9 @@ export function RightProperties() {
               onChange={(val) => updateEngine(activeEngine.id, { length: val })}
             />
 
-            {/* Position X */}
+            {/* Position X (Longitudinal Offset) */}
             <PropertyRow
-              label="Position X"
+              label="Position X (Longitudinal)"
               value={activeEngine.position[0]}
               min={-30.0}
               max={100.0}
@@ -988,9 +1277,9 @@ export function RightProperties() {
               }
             />
 
-            {/* Position Y (Lateral) */}
+            {/* Position Y (Lateral / Spanwise Offset) */}
             <PropertyRow
-              label="Lateral Offset Y"
+              label="Lateral Span Offset (Y)"
               value={activeEngine.position[1]}
               min={-30.0}
               max={30.0}
@@ -1005,28 +1294,11 @@ export function RightProperties() {
               }
             />
 
-            {/* Position Z (Height) */}
+            {/* Pylon Height / Clearance */}
             <PropertyRow
-              label="Vertical Offset Z"
-              value={activeEngine.position[2]}
-              min={-15.0}
-              max={15.0}
-              step={0.1}
-              unitLabel={unitLabel}
-              unitFactor={unitFactor}
-              accentClass="accent-purple-600"
-              onChange={(val) =>
-                updateEngine(activeEngine.id, {
-                  position: [activeEngine.position[0], activeEngine.position[1], val],
-                })
-              }
-            />
-
-            {/* Pylon Height */}
-            <PropertyRow
-              label="Pylon Mount Height"
+              label="Pylon Height / Clearance"
               value={activeEngine.pylonHeight}
-              min={0.0}
+              min={0.05}
               max={5.0}
               step={0.05}
               unitLabel={unitLabel}
@@ -1034,6 +1306,25 @@ export function RightProperties() {
               accentClass="accent-purple-600"
               onChange={(val) => updateEngine(activeEngine.id, { pylonHeight: val })}
             />
+
+            {/* Position Z (Height) - only show when NOT attached to wing */}
+            {activeEngine.attachToWing === false ? (
+              <PropertyRow
+                label="Vertical Offset Z"
+                value={activeEngine.position[2]}
+                min={-15.0}
+                max={15.0}
+                step={0.1}
+                unitLabel={unitLabel}
+                unitFactor={unitFactor}
+                accentClass="accent-purple-600"
+                onChange={(val) =>
+                  updateEngine(activeEngine.id, {
+                    position: [activeEngine.position[0], activeEngine.position[1], val],
+                  })
+                }
+              />
+            ) : null}
 
             {/* Color */}
             <div className="flex justify-between items-center pt-2 border-t border-slate-200">
@@ -1048,115 +1339,8 @@ export function RightProperties() {
           </div>
         )}
 
-        {/* 6. LANDING GEAR PARAMETERS */}
-        {activeGear && (
-          <div className="space-y-3">
-            <div className="font-semibold text-slate-700 flex items-center gap-1.5 border-b border-slate-200 pb-1">
-              <Settings className="w-4 h-4" /> Landing Gear Assembly ({activeGear.name})
-            </div>
-
-            {/* Nose Gear Section */}
-            <div className="space-y-2 bg-slate-50 p-2 rounded border border-slate-200">
-              <span className="font-semibold text-sky-700 block text-[11px]">Nose Gear Configuration</span>
-
-              <PropertyRow
-                label="Strut Length"
-                value={activeGear.noseGear.strutLength}
-                min={0.2}
-                max={10.0}
-                step={0.1}
-                unitLabel={unitLabel}
-                unitFactor={unitFactor}
-                onChange={(val) =>
-                  updateGear({
-                    noseGear: { ...activeGear.noseGear, strutLength: val },
-                  })
-                }
-              />
-
-              <PropertyRow
-                label="Wheel Diameter"
-                value={activeGear.noseGear.wheelDiameter}
-                min={0.1}
-                max={3.0}
-                step={0.05}
-                unitLabel={unitLabel}
-                unitFactor={unitFactor}
-                onChange={(val) =>
-                  updateGear({
-                    noseGear: { ...activeGear.noseGear, wheelDiameter: val },
-                  })
-                }
-              />
-            </div>
-
-            {/* Main Gear Section */}
-            <div className="space-y-2 bg-slate-50 p-2 rounded border border-slate-200">
-              <span className="font-semibold text-emerald-700 block text-[11px]">Main Gear Configuration</span>
-
-              <PropertyRow
-                label="Track Width"
-                value={activeGear.mainGear.trackWidth}
-                min={0.5}
-                max={30.0}
-                step={0.2}
-                unitLabel={unitLabel}
-                unitFactor={unitFactor}
-                accentClass="accent-emerald-600"
-                onChange={(val) =>
-                  updateGear({
-                    mainGear: { ...activeGear.mainGear, trackWidth: val },
-                  })
-                }
-              />
-
-              <PropertyRow
-                label="Strut Length"
-                value={activeGear.mainGear.strutLength}
-                min={0.2}
-                max={10.0}
-                step={0.1}
-                unitLabel={unitLabel}
-                unitFactor={unitFactor}
-                accentClass="accent-emerald-600"
-                onChange={(val) =>
-                  updateGear({
-                    mainGear: { ...activeGear.mainGear, strutLength: val },
-                  })
-                }
-              />
-
-              {/* Retraction Angle */}
-              <PropertyRow
-                label="Retraction Angle (deg)"
-                value={activeGear.mainGear.retractionAngle}
-                min={0}
-                max={90}
-                step={1}
-                accentClass="accent-amber-600"
-                onChange={(val) =>
-                  updateGear({
-                    mainGear: { ...activeGear.mainGear, retractionAngle: val },
-                  })
-                }
-              />
-            </div>
-
-            {/* Color */}
-            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-              <span className="text-slate-600 font-medium flex items-center gap-1.5"><Paintbrush className="w-3.5 h-3.5" /> Component Color</span>
-              <input
-                type="color"
-                value={activeGear.color}
-                onChange={(e) => updateGear({ color: e.target.value })}
-                className="w-8 h-6 rounded border border-slate-300 cursor-pointer bg-transparent"
-              />
-            </div>
-          </div>
-        )}
-
         {/* Empty fallback */}
-        {!activeFuselage && !activeSection && !activeWing && !activeTail && !activeEngine && !activeGear && (
+        {!activeFuselage && !activeSection && !activeWing && !activeTail && !activeEngine && (
           <div className="text-center py-12 text-slate-400 space-y-2">
             <Sliders className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
             <p>Select a component in the Scene Tree or Viewport to edit parameters.</p>

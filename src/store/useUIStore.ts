@@ -15,6 +15,7 @@ interface UIStoreState {
   units: UnitSystem;
   activeModal: ActiveModalType;
   activeSketchSectionId: string | null;
+  currentView: 'dashboard' | 'editor';
 
   setCameraView: (view: CameraPresetView) => void;
   setShadingMode: (mode: VisualShadingMode) => void;
@@ -25,6 +26,7 @@ interface UIStoreState {
   setUnits: (units: UnitSystem) => void;
   openModal: (modal: ActiveModalType, sectionId?: string | null) => void;
   closeModal: () => void;
+  setView: (view: 'dashboard' | 'editor') => void;
 }
 
 export const useUIStore = create<UIStoreState>((set) => ({
@@ -37,6 +39,7 @@ export const useUIStore = create<UIStoreState>((set) => ({
   units: 'metric',
   activeModal: null,
   activeSketchSectionId: null,
+  currentView: 'dashboard',
 
   setCameraView: (view) => set({ cameraView: view }),
   setShadingMode: (mode) => set({ shadingMode: mode }),
@@ -47,4 +50,5 @@ export const useUIStore = create<UIStoreState>((set) => ({
   setUnits: (units) => set({ units }),
   openModal: (modal, sectionId = null) => set({ activeModal: modal, activeSketchSectionId: sectionId }),
   closeModal: () => set({ activeModal: null, activeSketchSectionId: null }),
+  setView: (view) => set({ currentView: view }),
 }));

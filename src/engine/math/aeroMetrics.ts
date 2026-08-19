@@ -1,4 +1,5 @@
 import { AircraftModel, AeroMetrics } from '@/types/aircraft';
+import { computeEngineWingAttachment } from '../generators/engineGenerator';
 
 /**
  * Computes aerodynamic parameters, wetted area, volume, MAC, and CG estimation for an AircraftModel.
@@ -103,9 +104,12 @@ export function calculateAeroMetrics(model: AircraftModel): AeroMetrics {
     totalVol += engVol;
     totalWettedArea += engWetted;
 
-    sumMassX += eng.position[0] * engMass;
-    sumMassY += eng.position[1] * engMass;
-    sumMassZ += eng.position[2] * engMass;
+    const attachment = computeEngineWingAttachment(eng, model.wings);
+    const pos = attachment.isWingMounted ? attachment.actualPos : eng.position;
+
+    sumMassX += pos[0] * engMass;
+    sumMassY += pos[1] * engMass;
+    sumMassZ += pos[2] * engMass;
     totalMass += engMass;
   }
 

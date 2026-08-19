@@ -63,11 +63,14 @@ export interface WingletConfig {
   filletRadius: number; // Smooth C1/C2 blending fillet radius (m)
 }
 
+export type WingMountConfig = 'low' | 'mid' | 'high' | 'custom';
+
 export interface WingComponent {
   id: string;
   name: string;
   visible: boolean;
   locked: boolean;
+  mountConfig?: WingMountConfig; // High, Mid, Low, or Custom vertical mounting configuration
   span: number;         // Total wingspan (m)
   rootChord: number;    // Root chord length (m)
   tipChord: number;     // Tip chord length (m)
@@ -92,9 +95,13 @@ export interface TailComponent {
   type: 'conventional' | 'v-tail' | 't-tail' | 'twin-tail' | 'canard';
   horizontalSpan: number;
   horizontalChord: number;
+  horizontalTipChord?: number;
+  horizontalSweep?: number;     // Independent sweep for horizontal stabilizer (deg)
   verticalHeight: number;
   verticalChord: number;
-  sweep: number;
+  verticalTipChord?: number;
+  verticalSweep?: number;       // Independent sweep for vertical stabilizer (deg)
+  sweep: number;                // Shared/legacy sweep (used as fallback)
   dihedral: number;
   position: [number, number, number];
   color: string;
@@ -113,26 +120,10 @@ export interface EngineComponent {
   pylonWidth: number;
   fanBlades: number;
   color: string;
-}
-
-export interface GearComponent {
-  id: string;
-  name: string;
-  visible: boolean;
-  locked: boolean;
-  color: string;
-  noseGear: {
-    position: [number, number, number];
-    strutLength: number;
-    wheelDiameter: number;
-  };
-  mainGear: {
-    position: [number, number, number];
-    strutLength: number;
-    wheelDiameter: number;
-    trackWidth: number;
-    retractionAngle: number; // 0 deg (extended) to 90 deg (retracted)
-  };
+  attachToWing?: boolean;      // Automatically attach and conform to parent wing surface
+  parentWingId?: string;      // Wing ID to attach to (defaults to first wing)
+  spanFraction?: number;      // Spanwise station along wing (0 to 1)
+  mountStyle?: 'underwing' | 'overwing' | 'fuselage';
 }
 
 export interface AircraftModel {
@@ -144,7 +135,6 @@ export interface AircraftModel {
   wings: WingComponent[];
   tails: TailComponent[];
   engines: EngineComponent[];
-  gear: GearComponent;
 }
 
 export interface AirfoilPoint {

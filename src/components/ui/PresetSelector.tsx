@@ -15,11 +15,12 @@ export function PresetSelector() {
   if (activeModal !== 'presets') return null;
 
   const presetsList = [
-    { key: 'delta_strike', title: 'Delta Strike Fighter', subtitle: 'Delta wing stealth strike configuration with Integrated Winglets', color: 'from-blue-600 to-indigo-700' },
-    { key: 'commercial', title: 'Commercial Airliner', subtitle: 'High-efficiency transport airliner with drooped nose & swept winglets', color: 'from-sky-600 to-blue-800' },
-    { key: 'fighter', title: 'Supersonic Fighter', subtitle: 'Twin afterburning jet fighter with canted vertical tails', color: 'from-slate-700 to-slate-900' },
-    { key: 'glider', title: 'High-Performance Glider', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets', color: 'from-slate-300 to-slate-500' },
-    { key: 'drone', title: 'Recon Drone UAV', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail', color: 'from-slate-600 to-slate-800' },
+    { key: 'high_wing_cargo', title: 'Tactical Cargo Airlifter (High Wing)', subtitle: 'Heavy-lift transport with shoulder-mounted high wing, twin turboprops & T-tail', color: 'from-amber-600 to-amber-800' },
+    { key: 'commercial', title: 'Commercial Airliner (Low Wing)', subtitle: 'High-efficiency transport airliner with low-mounted swept wings & turbofans', color: 'from-sky-600 to-blue-800' },
+    { key: 'delta_strike', title: 'Delta Strike Fighter (Mid Wing)', subtitle: 'Mid-wing stealth strike configuration with blended winglets & jet engine', color: 'from-blue-600 to-indigo-700' },
+    { key: 'fighter', title: 'Supersonic Fighter (Mid Wing)', subtitle: 'Twin afterburning jet fighter with canted vertical tails & cropped delta wings', color: 'from-slate-700 to-slate-900' },
+    { key: 'glider', title: 'High-Performance Glider (High Wing)', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets', color: 'from-slate-300 to-slate-500' },
+    { key: 'drone', title: 'Recon Drone UAV (High Wing)', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail', color: 'from-slate-600 to-slate-800' },
   ];
 
   return (
