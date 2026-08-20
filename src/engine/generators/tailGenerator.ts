@@ -40,7 +40,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       color: tail.color,
       winglets: noWinglets(),
     };
-    return generateWingGeometry(vWing);
+    return generateWingGeometry(vWing, false);
   }
 
   if (tail.type === 't-tail') {
@@ -94,7 +94,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       winglets: noWinglets(),
     };
 
-    return mergeGeometries([generateWingGeometry(vertWing), generateWingGeometry(horizWing)]);
+    return mergeGeometries([generateWingGeometry(vertWing, true), generateWingGeometry(horizWing, false)]);
   }
 
   if (tail.type === 'twin-tail') {
@@ -149,56 +149,67 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     const lFin: WingComponent = { ...rFin, id: tail.id + '_lf', rootPos: finLeftPos };
 
     return mergeGeometries([
-      generateWingGeometry(horizWing),
-      generateWingGeometry(rFin),
-      generateWingGeometry(lFin),
+      generateWingGeometry(horizWing, false),
+      generateWingGeometry(rFin, true),
+      generateWingGeometry(lFin, true),
     ]);
   }
 
   // Default: Conventional Tail (Horizontal + Vertical)
-  const horiz: WingComponent = {
-    id: tail.id + '_h',
-    name: tail.name + ' Horiz',
-    visible: true,
-    locked: false,
-    span: tail.horizontalSpan,
-    rootChord: tail.horizontalChord,
-    tipChord: hTipChord,
-    sweep: hSweep,
-    dihedral: tail.dihedral,
-    twist: 0,
-    rootThickness: 10,
-    tipThickness: 8,
-    rootCamber: 0,
-    tipCamber: 0,
-    airfoilName: 'NACA 0009',
-    rootPos: pos,
-    color: tail.color,
-    winglets: noWinglets(),
-  };
+  const geos: THREE.BufferGeometry[] = [];
 
-  const vert: WingComponent = {
-    id: tail.id + '_v',
-    name: tail.name + ' Vert',
-    visible: true,
-    locked: false,
-    span: tail.verticalHeight * 2,
-    rootChord: tail.verticalChord,
-    tipChord: vTipChord,
-    sweep: vSweep + 5,
-    dihedral: 90,
-    twist: 0,
-    rootThickness: 12,
-    tipThickness: 9,
-    rootCamber: 0,
-    tipCamber: 0,
-    airfoilName: 'NACA 0012',
-    rootPos: pos,
-    color: tail.color,
-    winglets: noWinglets(),
-  };
+  const hasHoriz = tail.horizontalSpan > 0.2 && tail.horizontalChord > 0.2;
+  const hasVert = tail.verticalHeight > 0.2 && tail.verticalChord > 0.2;
 
-  return mergeGeometries([generateWingGeometry(horiz), generateWingGeometry(vert)]);
+  if (hasHoriz) {
+    const horiz: WingComponent = {
+      id: tail.id + '_h',
+      name: tail.name + ' Horiz',
+      visible: true,
+      locked: false,
+      span: tail.horizontalSpan,
+      rootChord: tail.horizontalChord,
+      tipChord: hTipChord,
+      sweep: hSweep,
+      dihedral: tail.dihedral || 0,
+      twist: 0,
+      rootThickness: 10,
+      tipThickness: 8,
+      rootCamber: 0,
+      tipCamber: 0,
+      airfoilName: 'NACA 0009',
+      rootPos: pos,
+      color: tail.color,
+      winglets: noWinglets(),
+    };
+    geos.push(generateWingGeometry(horiz, false));
+  }
+
+  if (hasVert) {
+    const vert: WingComponent = {
+      id: tail.id + '_v',
+      name: tail.name + ' Vert',
+      visible: true,
+      locked: false,
+      span: tail.verticalHeight * 2,
+      rootChord: tail.verticalChord,
+      tipChord: vTipChord,
+      sweep: vSweep,
+      dihedral: 90,
+      twist: 0,
+      rootThickness: 12,
+      tipThickness: 9,
+      rootCamber: 0,
+      tipCamber: 0,
+      airfoilName: 'NACA 0012',
+      rootPos: pos,
+      color: tail.color,
+      winglets: noWinglets(),
+    };
+    geos.push(generateWingGeometry(vert, true));
+  }
+
+  return mergeGeometries(geos);
 }
 
 function mergeGeometries(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {

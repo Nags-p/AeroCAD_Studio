@@ -1,15 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
   images: {
     unoptimized: true,
   },
-  // If your GitHub Pages URL is https://<username>.github.io/AeroCAD_Studio, uncomment the line below:
   basePath: process.env.NODE_ENV === 'production' ? '/AeroCAD_Studio' : '',
   reactStrictMode: true,
   transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     config.externals = [...(config.externals || []), { canvas: 'canvas' }];
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+        child_process: false,
+      };
+    }
     return config;
   },
 };

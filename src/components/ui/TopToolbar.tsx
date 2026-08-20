@@ -108,7 +108,7 @@ export function TopToolbar() {
                   onClick={() => { openModal('export'); setActiveDropdown(null); }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-sky-600 font-semibold"
                 >
-                  <Download className="w-3.5 h-3.5" /> Export CAD (STL, OBJ, glTF, JSON)...
+                  <Download className="w-3.5 h-3.5" /> Export CAD (STEP, IGES, Parasolid, STL, OBJ)...
                 </button>
               </div>
             )}

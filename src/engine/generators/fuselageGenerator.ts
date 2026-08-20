@@ -234,6 +234,19 @@ export function generateFuselageGeometry(f: FuselageComponent): THREE.BufferGeom
     }
   }
 
+  // Close the tail end cap with a watertight fan of triangles
+  const lastRingStart = 1 + (axialSegments - 1) * radialSegments;
+  const tailCenterIdx = vertices.length / 3;
+  const tailRing = sampledRings[axialSegments];
+  vertices.push(tailRing.x, tailRing.centerOffsetZ, tailRing.centerOffsetY);
+  uvs.push(1.0, 0.5);
+
+  for (let j = 0; j < radialSegments; j++) {
+    const curr = lastRingStart + j;
+    const next = lastRingStart + ((j + 1) % radialSegments);
+    indices.push(tailCenterIdx, curr, next);
+  }
+
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
@@ -241,3 +254,4 @@ export function generateFuselageGeometry(f: FuselageComponent): THREE.BufferGeom
 
   return geometry;
 }
+

@@ -42,17 +42,39 @@ interface AircraftStoreState {
   canRedo: boolean;
 }
 
-const initialModel = AIRCRAFT_PRESETS.delta_strike || AIRCRAFT_PRESETS.commercial;
+function sanitizeModel(model: AircraftModel): AircraftModel {
+  if (!model) return model;
+  const m: AircraftModel = JSON.parse(JSON.stringify(model));
+  const fusLen = m.fuselage?.length || 12.0;
+
+  if (m.tails) {
+    m.tails = m.tails.map((tail: TailComponent) => {
+      const copy = { ...tail };
+      // Fix legacy preset tail position if placed in mid-fuselage (< 25% length)
+      if (copy.position && copy.position[0] < fusLen * 0.25 && fusLen >= 8) {
+        copy.position = [fusLen * 0.35, copy.position[1], copy.position[2]];
+      }
+      if (copy.horizontalSpan <= 0.15) {
+        copy.dihedral = 0;
+      }
+      return copy;
+    });
+  }
+  return m;
+}
+
+const initialModel = sanitizeModel(AIRCRAFT_PRESETS.delta_strike || AIRCRAFT_PRESETS.commercial);
 
 export const useAircraftStore = create<AircraftStoreState>((set, get) => {
   const pushState = (newModel: AircraftModel) => {
+    const sanitized = sanitizeModel(newModel);
     const { history, historyIndex } = get();
     const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(JSON.parse(JSON.stringify(newModel)));
+    newHistory.push(JSON.parse(JSON.stringify(sanitized)));
     if (newHistory.length > 50) newHistory.shift();
 
     set({
-      model: newModel,
+      model: sanitized,
       history: newHistory,
       historyIndex: newHistory.length - 1,
       canUndo: newHistory.length > 1,
@@ -61,10 +83,10 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
   };
 
   return {
-    model: JSON.parse(JSON.stringify(initialModel)),
+    model: sanitizeModel(initialModel),
     selectedId: 'sec-1',
     selectedType: 'section',
-    history: [JSON.parse(JSON.stringify(initialModel))],
+    history: [sanitizeModel(initialModel)],
     historyIndex: 0,
     canUndo: false,
     canRedo: false,
@@ -299,12 +321,12 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     loadPreset: (presetKey) => {
       const preset = AIRCRAFT_PRESETS[presetKey];
       if (preset) {
-        pushState(JSON.parse(JSON.stringify(preset)));
+        pushState(sanitizeModel(JSON.parse(JSON.stringify(preset))));
       }
     },
 
     loadJSONModel: (jsonModel) => {
-      pushState(JSON.parse(JSON.stringify(jsonModel)));
+      pushState(sanitizeModel(JSON.parse(JSON.stringify(jsonModel))));
     },
 
     undo: () => {
