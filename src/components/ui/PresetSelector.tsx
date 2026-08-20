@@ -4,6 +4,8 @@ import React from 'react';
 import { X, Sparkles, Check } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useAircraftStore } from '@/store/useAircraftStore';
+import { AircraftThumbnail } from './AircraftThumbnail';
+import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 
 export function PresetSelector() {
   const activeModal = useUIStore((state) => state.activeModal);
@@ -15,12 +17,12 @@ export function PresetSelector() {
   if (activeModal !== 'presets') return null;
 
   const presetsList = [
-    { key: 'high_wing_cargo', title: 'Tactical Cargo Airlifter (High Wing)', subtitle: 'Heavy-lift transport with shoulder-mounted high wing, twin turboprops & T-tail', color: 'from-amber-600 to-amber-800' },
-    { key: 'commercial', title: 'Commercial Airliner (Low Wing)', subtitle: 'High-efficiency transport airliner with low-mounted swept wings & turbofans', color: 'from-sky-600 to-blue-800' },
-    { key: 'delta_strike', title: 'Delta Strike Fighter (Mid Wing)', subtitle: 'Mid-wing stealth strike configuration with blended winglets & jet engine', color: 'from-blue-600 to-indigo-700' },
-    { key: 'fighter', title: 'Supersonic Fighter (Mid Wing)', subtitle: 'Twin afterburning jet fighter with canted vertical tails & cropped delta wings', color: 'from-slate-700 to-slate-900' },
-    { key: 'glider', title: 'High-Performance Glider (High Wing)', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets', color: 'from-slate-300 to-slate-500' },
-    { key: 'drone', title: 'Recon Drone UAV (High Wing)', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail', color: 'from-slate-600 to-slate-800' },
+    { key: 'high_wing_cargo', title: 'Tactical Cargo Airlifter (High Wing)', subtitle: 'Heavy-lift transport with shoulder-mounted high wing, twin turboprops & T-tail' },
+    { key: 'commercial', title: 'Commercial Airliner (Low Wing)', subtitle: 'High-efficiency transport airliner with low-mounted swept wings & turbofans' },
+    { key: 'delta_strike', title: 'Delta Strike Fighter (Mid Wing)', subtitle: 'Mid-wing stealth strike configuration with blended winglets & jet engine' },
+    { key: 'fighter', title: 'Supersonic Fighter (Mid Wing)', subtitle: 'Twin afterburning jet fighter with canted vertical tails & cropped delta wings' },
+    { key: 'glider', title: 'High-Performance Glider (High Wing)', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets' },
+    { key: 'drone', title: 'Recon Drone UAV (High Wing)', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail' },
   ];
 
   return (
@@ -36,9 +38,10 @@ export function PresetSelector() {
           </button>
         </div>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[75vh] overflow-y-auto">
           {presetsList.map(({ key, title, subtitle }) => {
             const isSelected = currentModelId.includes(key);
+            const presetModel = AIRCRAFT_PRESETS[key];
             return (
               <div
                 key={key}
@@ -46,26 +49,31 @@ export function PresetSelector() {
                   loadPreset(key);
                   closeModal();
                 }}
-                className={`p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 relative overflow-hidden group ${
+                className={`p-4 rounded-xl border transition-all cursor-pointer flex gap-3 relative overflow-hidden group ${
                   isSelected
                     ? 'border-sky-500 bg-sky-50 shadow-md ring-1 ring-sky-500'
                     : 'border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-sky-300'
                 }`}
               >
-                <div className="space-y-1 z-10">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-slate-900 group-hover:text-sky-700 transition">
-                      {title}
-                    </h4>
-                    {isSelected && <Check className="w-4 h-4 text-sky-600" />}
+                {presetModel && (
+                  <AircraftThumbnail model={presetModel} width={52} height={52} />
+                )}
+                <div className="flex-1 flex flex-col justify-between space-y-2 min-w-0 z-10">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <h4 className="font-bold text-xs text-slate-900 group-hover:text-sky-700 transition truncate">
+                        {title}
+                      </h4>
+                      {isSelected && <Check className="w-4 h-4 text-sky-600 flex-shrink-0" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-tight line-clamp-2">{subtitle}</p>
                   </div>
-                  <p className="text-xs text-slate-500">{subtitle}</p>
-                </div>
 
-                <div className="flex justify-end pt-2 z-10">
-                  <button className="text-xs font-bold px-3 py-1.5 rounded bg-white text-sky-700 border border-slate-200 group-hover:bg-sky-600 group-hover:text-white transition">
-                    Load Preset
-                  </button>
+                  <div className="flex justify-end pt-1">
+                    <button className="text-xs font-bold px-3 py-1 rounded bg-white text-sky-700 border border-slate-200 group-hover:bg-sky-600 group-hover:text-white transition">
+                      Load Preset
+                    </button>
+                  </div>
                 </div>
               </div>
             );
