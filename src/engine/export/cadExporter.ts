@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { STLExporter } from 'three-stdlib';
 import { OBJExporter } from 'three-stdlib';
 import { GLTFExporter } from 'three-stdlib';
-import { AircraftModel, WingComponent } from '@/types/aircraft';
-import { generateFuselageGeometry, resolveStationPositions } from '@/engine/generators/fuselageGenerator';
-import { generateWingGeometry } from '@/engine/generators/wingGenerator';
-import { generateTailGeometry } from '@/engine/generators/tailGenerator';
-import { generateEngineGeometry, computeEngineWingAttachment } from '@/engine/generators/engineGenerator';
-import { generateNACA4Digit } from '@/engine/math/naca';
+import { AircraftModel, WingComponent } from '../../types/aircraft';
+import { generateFuselageGeometry, resolveStationPositions } from '../generators/fuselageGenerator';
+import { generateWingGeometry } from '../generators/wingGenerator';
+import { generateTailGeometry } from '../generators/tailGenerator';
+import { generateEngineGeometry, computeEngineWingAttachment } from '../generators/engineGenerator';
+import { generateNACA4Digit } from '../math/naca';
 
 /**
  * Robust file downloader supporting strings, ArrayBuffer, DataView, Uint8Array.
@@ -256,7 +256,7 @@ export function exportAircraftSTEP(
 
   const now = new Date();
   const dateStr = now.toISOString().replace(/\.\d+Z$/, '');
-  const modelName = (model?.name || 'AeroCAD_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const modelName = (model?.name || 'TurboDESiM_Aero_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   let entityId = 1;
   const lines: string[] = [];
@@ -264,8 +264,8 @@ export function exportAircraftSTEP(
   // 1. STEP ISO-10303-21 Header (Standard AP214 Automotive / AP203 Mechanical Design)
   lines.push('ISO-10303-21;');
   lines.push('HEADER;');
-  lines.push("FILE_DESCRIPTION(('AeroCAD Studio 3D Smooth Analytical Solid CAD Model','STEP AP214 B-Rep Solid Geometry'),'2;1');");
-  lines.push(`FILE_NAME('${filename}','${dateStr}',('AeroCAD User'),('DESiM Aerospace Design'),'AeroCAD Studio NURBS B-Rep Engine v3.5','AeroCAD Studio','');`);
+  lines.push("FILE_DESCRIPTION(('TurboDESiM Aero 3D Smooth Analytical Solid CAD Model','STEP AP214 B-Rep Solid Geometry'),'2;1');");
+  lines.push(`FILE_NAME('${filename}','${dateStr}',('TurboDESiM Aero User'),('DESiM Aerospace Design'),'TurboDESiM Aero NURBS B-Rep Engine v3.5','TurboDESiM Aero','');`);
   lines.push("FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));");
   lines.push('ENDSEC;');
   lines.push('DATA;');
@@ -284,7 +284,7 @@ export function exportAircraftSTEP(
   lines.push(`#${prodDefCtxId} = PRODUCT_DEFINITION_CONTEXT('part definition',#${appCtxId},'design');`);
 
   const prodId = entityId++;
-  lines.push(`#${prodId} = PRODUCT('${modelName}','${modelName}','AeroCAD 3D Smooth Solid Aircraft Model',(#${prodCtxId}));`);
+  lines.push(`#${prodId} = PRODUCT('${modelName}','${modelName}','TurboDESiM Aero 3D Smooth Solid Aircraft Model',(#${prodCtxId}));`);
 
   const prodDefFormId = entityId++;
   lines.push(`#${prodDefFormId} = PRODUCT_DEFINITION_FORMATION('1','',#${prodId});`);
@@ -403,19 +403,77 @@ export function exportAircraftSTEP(
     const pU = Math.min(uDegree, Nu - 1);
     const pV = Math.min(vDegree, Nv - 1);
 
-    const numKnotsU = Nu - pU + 1;
-    const multsU: number[] = [pU + 1];
-    for (let i = 1; i < numKnotsU - 1; i++) multsU.push(1);
-    multsU.push(pU + 1);
-    const knotsU: string[] = [];
-    for (let i = 0; i < numKnotsU; i++) knotsU.push(`${i}.0`);
+    const computeKnotVector = (paramsNorm: number[], p: number): { knots: string[], mults: number[] } => {
+      const n = paramsNorm.length - 1;
+      const rawKnots: number[] = [0.0];
+      
+      // De Boor knot averaging for intermediate knots (fixed index shift)
+      for (let i = 1; i <= n - p; i++) {
+        let sum = 0;
+        for (let j = i; j < i + p; j++) {
+          sum += paramsNorm[j];
+        }
+        rawKnots.push(sum / p);
+      }
+      rawKnots.push(1.0);
 
-    const numKnotsV = Nv - pV + 1;
-    const multsV: number[] = [pV + 1];
-    for (let i = 1; i < numKnotsV - 1; i++) multsV.push(1);
-    multsV.push(pV + 1);
-    const knotsV: string[] = [];
-    for (let i = 0; i < numKnotsV; i++) knotsV.push(`${i}.0`);
+      // Post-process to guarantee strict monotonicity (min separation of 1e-5)
+      // This prevents rounded coordinates from collapsing into duplicate distinct knots in the STEP file.
+      const distinctKnots: number[] = [0.0];
+      for (let i = 1; i < rawKnots.length - 1; i++) {
+        distinctKnots.push(Math.max(distinctKnots[i - 1] + 1e-5, rawKnots[i]));
+      }
+
+      if (distinctKnots.length > 1 && distinctKnots[distinctKnots.length - 1] >= 1.0) {
+        const maxVal = distinctKnots[distinctKnots.length - 1];
+        const targetMax = 1.0 - 1e-5;
+        for (let i = 1; i < distinctKnots.length; i++) {
+          distinctKnots[i] = (distinctKnots[i] / maxVal) * targetMax;
+        }
+      }
+      distinctKnots.push(1.0);
+
+      const knotsStr = distinctKnots.map(k => k.toFixed(6));
+      const mults = [p + 1];
+      for (let i = 1; i < knotsStr.length - 1; i++) {
+        mults.push(1);
+      }
+      mults.push(p + 1);
+
+      return { knots: knotsStr, mults };
+    };
+
+    // --- U Direction Chord Length Parametrization ---
+    const uParams: number[] = [0];
+    for (let i = 1; i < Nu; i++) {
+      let sumDist = 0;
+      for (let j = 0; j < Nv; j++) {
+        const p1 = grid[i][j];
+        const p0 = grid[i - 1][j];
+        sumDist += Math.hypot(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
+      }
+      const avgDist = sumDist / Nv;
+      uParams.push(uParams[i - 1] + Math.max(1e-3, avgDist));
+    }
+    const maxU = uParams[Nu - 1];
+    const uParamsNorm = uParams.map((u) => u / maxU);
+    const { knots: knotsU, mults: multsU } = computeKnotVector(uParamsNorm, pU);
+
+    // --- V Direction Chord Length Parametrization ---
+    const vParams: number[] = [0];
+    for (let j = 1; j < Nv; j++) {
+      let sumDist = 0;
+      for (let i = 0; i < Nu; i++) {
+        const p1 = grid[i][j];
+        const p0 = grid[i][j - 1];
+        sumDist += Math.hypot(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z);
+      }
+      const avgDist = sumDist / Nu;
+      vParams.push(vParams[j - 1] + Math.max(1e-3, avgDist));
+    }
+    const maxV = vParams[Nv - 1];
+    const vParamsNorm = vParams.map((v) => v / maxV);
+    const { knots: knotsV, mults: multsV } = computeKnotVector(vParamsNorm, pV);
 
     const rowStrings = grid.map(
       (row) => `(${row.map((pt) => `#${addPoint(pt)}`).join(',')})`
@@ -486,8 +544,8 @@ export function exportAircraftSTEP(
     const S = f.noseRoundness !== undefined ? f.noseRoundness : 0.75;
     const tailScale = f.tail !== undefined ? f.tail : 0.3;
 
-    const numU = 16; // Longitudinal stations along length
-    const numV = 16; // Radial stations around circumference
+    const numU = 64; // Longitudinal stations along length
+    const numV = 64; // Radial stations around circumference
 
     const s0 = resolved[0] || { xPos: 0, width: 2, height: 2, shapeType: 'ellipse', nExp: 2, mExp: 2, cornerRadius: 0.3 };
     const s1 = resolved.find((s) => s.xPos > 0) || resolved[1] || s0;
@@ -509,12 +567,11 @@ export function exportAircraftSTEP(
     );
     const bodySpline = new THREE.CatmullRomCurve3(splinePoints, false, 'catmullrom', 0.5);
 
-    const gridPort: Point3D[][] = [];
-    const gridStbd: Point3D[][] = [];
-
+    // Generate full closed cylinder wrapping around
+    const gridFull: Point3D[][] = [];
     for (let uIdx = 0; uIdx <= numU; uIdx++) {
       const t = uIdx / numU;
-      const x = t * len - len / 2;
+      let x = t * len;
 
       let rx = 0, ry = 0;
       if (t <= t1) {
@@ -547,70 +604,69 @@ export function exportAircraftSTEP(
         centerOffsetY = (f.tailY || 0) * 1000.0 * v * v;
       }
 
-      // Port side (from top theta=0 down through +Y to bottom theta=PI)
-      const rowPort: Point3D[] = [];
-      // Starboard side (from bottom theta=PI up through -Y to top theta=2*PI)
-      const rowStbd: Point3D[] = [];
-
-      for (let vIdx = 0; vIdx <= numV / 2; vIdx++) {
-        const thetaP = (vIdx / (numV / 2)) * Math.PI; // 0 to PI
-        const yP = Math.sin(thetaP) * rx + centerOffsetY;
-        const zP = Math.cos(thetaP) * ry + centerOffsetZ;
-        rowPort.push({ x, y: yP, z: zP });
-
-        const thetaS = Math.PI + (vIdx / (numV / 2)) * Math.PI; // PI to 2*PI
-        const yS = Math.sin(thetaS) * rx + centerOffsetY;
-        const zS = Math.cos(thetaS) * ry + centerOffsetZ;
-        rowStbd.push({ x, y: yS, z: zS });
+      // Enforce C1 tangent continuity at the pole for a perfectly smooth rounded dome,
+      // but scale down the control radius so it doesn't create a massive blunt cylinder face
+      // CRITICAL: Must also lock the center offsets to prevent shearing!
+      if (uIdx === 1) {
+        x = gridFull[0][0].x;
+        centerOffsetY = gridFull[0][0].y;
+        centerOffsetZ = gridFull[0][0].z;
+        rx *= 0.816; // Optimal B-spline CP weight for spherical dome curvature
+        ry *= 0.816;
       }
 
-      gridPort.push(rowPort);
-      gridStbd.push(rowStbd);
+      const rowFull: Point3D[] = [];
+      for (let vIdx = 0; vIdx <= numV; vIdx++) {
+        const theta = (vIdx / numV) * 2 * Math.PI;
+        const yP = Math.sin(theta) * rx + centerOffsetY;
+        const zP = Math.cos(theta) * ry + centerOffsetZ;
+        rowFull.push({ x, y: yP, z: zP });
+      }
+
+      // Enforce perfectly horizontal tangents at the top seam to eliminate the sharp spine crease
+      rowFull[1].z = rowFull[0].z;
+      rowFull[numV - 1].z = rowFull[numV].z;
+
+      // Also flatten the bottom keel
+      const mid = Math.floor(numV / 2);
+      rowFull[mid - 1].z = rowFull[mid].z;
+      rowFull[mid + 1].z = rowFull[mid].z;
+
+      gridFull.push(rowFull);
     }
 
-    const surfPortId = addBSplineSurface(gridPort, 3, 3, 'Fuselage_Port_Skin');
-    const surfStbdId = addBSplineSurface(gridStbd, 3, 3, 'Fuselage_Starboard_Skin');
+    const surfFullId = addBSplineSurface(gridFull, 3, 3, 'Fuselage_Skin');
 
-    // Shared curves between Port and Starboard
-    const curveTop = addBSplineCurve(gridPort.map((r) => r[0]), 'Fuselage_Top_Spine');
-    const curveBtm = addBSplineCurve(gridPort.map((r) => r[numV / 2]), 'Fuselage_Bottom_Keel');
+    // Shared curves
+    const curveSeam = addBSplineCurve(gridFull.map((r) => r[0]), 'Fuselage_Top_Seam');
+    const edgeSeam = addEdge(gridFull[0][0], gridFull[numU][0], curveSeam);
 
-    const edgeTop = addEdge(gridPort[0][0], gridPort[numU][0], curveTop);
-    const edgeBtm = addEdge(gridPort[0][numV / 2], gridPort[numU][numV / 2], curveBtm);
+    // Tail edge is a full circle
+    const curveTail = addBSplineCurve(gridFull[numU], 'Fuselage_Tail');
+    const edgeTail = addEdge(gridFull[numU][0], gridFull[numU][0], curveTail); // Closed edge
 
-    const edgePortTail = addEdge(gridPort[numU][0], gridPort[numU][numV / 2], addBSplineCurve(gridPort[numU], 'Fuselage_Port_Tail'));
-    const edgePortNose = addEdge(gridPort[0][0], gridPort[0][numV / 2], addBSplineCurve(gridPort[0], 'Fuselage_Port_Nose'));
+    // Nose edge is a degenerate curve (pole)
+    const curveNose = addBSplineCurve(gridFull[0], 'Fuselage_Nose');
+    const edgeNose = addEdge(gridFull[0][0], gridFull[0][0], curveNose);
 
-    const loopPort = addEdgeLoop([
-      addOrientedEdge(edgeTop, true),
-      addOrientedEdge(edgePortTail, true),
-      addOrientedEdge(edgeBtm, false),
-      addOrientedEdge(edgePortNose, false),
-    ]);
-
-    const edgeStbdTail = addEdge(gridStbd[numU][0], gridStbd[numU][numV / 2], addBSplineCurve(gridStbd[numU], 'Fuselage_Stbd_Tail'));
-    const edgeStbdNose = addEdge(gridStbd[0][0], gridStbd[0][numV / 2], addBSplineCurve(gridStbd[0], 'Fuselage_Stbd_Nose'));
-
-    const loopStbd = addEdgeLoop([
-      addOrientedEdge(edgeBtm, true),
-      addOrientedEdge(edgeStbdTail, true),
-      addOrientedEdge(edgeTop, false),
-      addOrientedEdge(edgeStbdNose, false),
+    const loopFuse = addEdgeLoop([
+      addOrientedEdge(edgeSeam, true),
+      addOrientedEdge(edgeTail, true),
+      addOrientedEdge(edgeSeam, false),
+      addOrientedEdge(edgeNose, false),
     ]);
 
     // Flat tail end cap at +X
-    const tailPlane = addPlaneSurface(gridPort[numU][0], { x: 1, y: 0, z: 0 });
+    const tailPlane = addPlaneSurface(gridFull[numU][0], { x: 1, y: 0, z: 0 });
     const loopTail = addEdgeLoop([
-      addOrientedEdge(edgeStbdTail, false),
-      addOrientedEdge(edgePortTail, false),
+      addOrientedEdge(edgeTail, false),
     ]);
 
-    const facePort = addFace(surfPortId, loopPort, 'Fuselage_Port_Face');
-    const faceStbd = addFace(surfStbdId, loopStbd, 'Fuselage_Starboard_Face');
-    const faceTail = addFace(tailPlane, loopTail, 'Fuselage_Tail_Cap');
+    const faceFuse = addFace(surfFullId, loopFuse, 'Fuselage_Face', true);
+    const faceTail = addFace(tailPlane, loopTail, 'Fuselage_Tail_Cap', true);
 
     const fuseShellId = entityId++;
-    lines.push(`#${fuseShellId} = CLOSED_SHELL('Fuselage_Shell',(#${facePort},#${faceStbd},#${faceTail}));`);
+    lines.push(`#${fuseShellId} = CLOSED_SHELL('Fuselage_Shell',(#${faceFuse},#${faceTail}));`);
 
     const fuseSolidId = entityId++;
     lines.push(`#${fuseSolidId} = MANIFOLD_SOLID_BREP('Fuselage',#${fuseShellId});`);
@@ -618,19 +674,58 @@ export function exportAircraftSTEP(
   }
 
   // ==============================================================
+  // 1.5. COSINE-SPACED NACA GENERATOR FOR CAD B-SPLINE STABILITY
+  // ==============================================================
+  const getUniformNACA = (nacaCode: string, numPoints: number = 24): { upper: Point3D[], lower: Point3D[] } => {
+    const digits = nacaCode.replace(/[^0-9]/g, '');
+    let m = 0.02; let p = 0.4; let t = 0.12;
+    if (digits.length === 4) {
+      m = parseInt(digits[0], 10) / 100;
+      p = parseInt(digits[1], 10) / 10;
+      t = parseInt(digits.slice(2), 10) / 100;
+    }
+    const upper: Point3D[] = [];
+    const lower: Point3D[] = [];
+    for (let i = 0; i <= numPoints; i++) {
+      // Half-cosine spacing: concentrates points near LE where curvature is highest,
+      // naturally producing smooth B-spline surfaces without artificial control point hacks
+      const beta = (i / numPoints) * Math.PI;
+      const x = 0.5 * (1 - Math.cos(beta));
+      let yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.1260 * x - 0.3516 * x*x + 0.2843 * x*x*x - 0.1015 * x*x*x*x);
+      let yc = 0, dyc_dx = 0;
+      if (m > 0 && p > 0) {
+        if (x < p) {
+          yc = (m / (p * p)) * (2 * p * x - x * x);
+          dyc_dx = ((2 * m) / (p * p)) * (p - x);
+        } else {
+          yc = (m / ((1 - p) * (1 - p))) * ((1 - 2 * p) + 2 * p * x - x * x);
+          dyc_dx = ((2 * m) / ((1 - p) * (1 - p))) * (p - x);
+        }
+      }
+      const theta = Math.atan(dyc_dx);
+      const ptX_up = x - yt * Math.sin(theta);
+      const ptX_lo = x + yt * Math.sin(theta);
+      
+      upper.push({ x: ptX_up, y: yc + yt * Math.cos(theta), z: 0 });
+      lower.push({ x: ptX_lo, y: yc - yt * Math.cos(theta), z: 0 });
+    }
+    return { upper, lower };
+  };
+
+  // ==============================================================
   // 2. WINGS & STABILIZERS SMOOTH NURBS SOLID BODIES
   // ==============================================================
   const buildSmoothWingSolid = (w: WingComponent, isVertical: boolean, compName: string) => {
     if (!w || !w.visible) return;
 
-    const numSpan = 8;
+    const numSpan = 24;
     const wl = w.winglets;
     const hasWl = wl && wl.enabled && !isVertical;
-    const numWl = hasWl ? 4 : 0;
+    const numWl = hasWl ? 24 : 0;
     const totalSpanSections = numSpan + numWl;
 
-    const numChord = 12;
-    const airfoil = generateNACA4Digit(w.airfoilName || 'NACA 2412', numChord);
+    const numChord = 32;
+    const airfoil = getUniformNACA(w.airfoilName || 'NACA 2412', numChord);
     const halfSpan = (w.span / 2) * 1000.0; // mm
     const sweepRad = (w.sweep * Math.PI) / 180;
     const dihedralRad = ((w.dihedral || 0) * Math.PI) / 180;
@@ -664,16 +759,16 @@ export function exportAircraftSTEP(
 
           if (isVertical) {
             const zLoc = spanT * halfSpan;
-            // Map airfoil thickness (ptU.y) to Z axis for vertical surfaces
+            // Map airfoil thickness (ptU.y) to Y axis for vertical surfaces
             rowUp.push({
               x: rootX + xOff + ptU.x * chord,
-              y: rootY,
-              z: rootZ + zLoc + ptU.y * chord,
+              y: rootY + ptU.y * chord,
+              z: rootZ + zLoc,
             });
             rowLo.push({
               x: rootX + xOff + ptL.x * chord,
-              y: rootY,
-              z: rootZ + zLoc + ptL.y * chord,
+              y: rootY + ptL.y * chord,
+              z: rootZ + zLoc,
             });
           } else {
             const yLoc = spanT * halfSpan * Math.cos(dihedralRad) * sideMult;
@@ -718,8 +813,9 @@ export function exportAircraftSTEP(
 
             let alpha = 1.0;
             if (R_fillet > 1.0 && sLoc <= R_fillet) {
-              const u = sLoc / R_fillet;
-              alpha = u * u * (3 - 2 * u);
+              const u = Math.min(1.0, Math.max(0.0, sLoc / R_fillet));
+              // C2-smooth quintic Hermite blending (matches viewport renderer)
+              alpha = u * u * u * (u * (u * 6.0 - 15.0) + 10.0);
             }
 
             const currentAngle = dihedralRad + (Math.PI / 2 - targetCantRad - dihedralRad) * alpha;
@@ -752,149 +848,111 @@ export function exportAircraftSTEP(
       }
 
       // Transposed grids where rows are spanwise (0..totalSpanSections) and cols are chordwise (0..numChord)
-      const gridSpanUpper: Point3D[][] = [];
-      const gridSpanLower: Point3D[][] = [];
-      for (let s = 0; s <= totalSpanSections; s++) {
-        const rUp: Point3D[] = [];
-        const rLo: Point3D[] = [];
-        for (let c = 0; c <= numChord; c++) {
-          rUp.push(gridUpper[c][s]);
-          rLo.push(gridLower[c][s]);
-        }
-        gridSpanUpper.push(rUp);
-        gridSpanLower.push(rLo);
+      // Create continuous unified wing grid
+      const gridWing: Point3D[][] = [];
+      for (let c = numChord; c >= 0; c--) {
+        gridWing.push(gridLower[c]); // Lower TE -> LE
+      }
+      for (let c = 1; c <= numChord; c++) {
+        gridWing.push(gridUpper[c]); // LE -> Upper TE
       }
 
-      // Outward NURBS surface grid assignment:
-      // Starboard Upper (+X x +Y = +Z): gridUpper (chord x span)
-      // Starboard Lower (+Y x +X = -Z): gridSpanLower (span x chord)
-      // Port Upper (-Y x +X = +Z): gridSpanUpper (span x chord)
-      // Port Lower (+X x -Y = -Z): gridLower (chord x span)
-      const surfUpGrid = gridUpper;
-      const surfLoGrid = gridLower;
+      // We only need the surface that wraps along span
+      const gridSpanWing: Point3D[][] = [];
+      for (let s = 0; s <= totalSpanSections; s++) {
+        const rWing: Point3D[] = [];
+        for (let c = 0; c <= 2 * numChord; c++) {
+          rWing.push(gridWing[c][s]);
+        }
+        gridSpanWing.push(rWing);
+      }
 
-      const surfUpId = addBSplineSurface(surfUpGrid, 3, 3, `${sideName}_Upper_Skin`);
-      const surfLoId = addBSplineSurface(surfLoGrid, 3, 3, `${sideName}_Lower_Skin`);
+      // Always use gridSpanWing (spanwise U, chordwise V) for both wings and stabilizers.
+      // Many CAD kernels have bugs/limitations when the closed-like chordwise direction is mapped to the U parameter,
+      // but they handle it perfectly when mapped to the V parameter.
+      const surfWingGrid = gridSpanWing;
+      const surfWingId = addBSplineSurface(surfWingGrid, 3, 3, `${sideName}_Skin`);
 
-      // Corner vertices
-      const pRootLE = gridUpper[0][0];
-      const pTipLE = gridUpper[0][totalSpanSections];
-      const pTipTE_Up = gridUpper[numChord][totalSpanSections];
-      const pRootTE_Up = gridUpper[numChord][0];
-      const pTipTE_Lo = gridLower[numChord][totalSpanSections];
-      const pRootTE_Lo = gridLower[numChord][0];
+      const pRootTE_Lo = gridWing[0][0];
+      const pTipTE_Lo = gridWing[0][totalSpanSections];
+      const pRootTE_Up = gridWing[2 * numChord][0];
+      const pTipTE_Up = gridWing[2 * numChord][totalSpanSections];
 
-      // Exact 3D Boundary curves derived from grid rows/cols
-      const edgeLE = addEdge(pRootLE, pTipLE, addBSplineCurve(gridUpper[0], `${sideName}_Leading_Edge`));
-      const edgeTipUp = addEdge(pTipLE, pTipTE_Up, addBSplineCurve(gridSpanUpper[totalSpanSections], `${sideName}_Tip_Upper`));
-      const edgeTE_Up = addEdge(pRootTE_Up, pTipTE_Up, addBSplineCurve(gridUpper[numChord], `${sideName}_TE_Upper`));
-      const edgeRootUp = addEdge(pRootLE, pRootTE_Up, addBSplineCurve(gridSpanUpper[0], `${sideName}_Root_Upper`));
+      const edgeTE_Lo = addEdge(pRootTE_Lo, pTipTE_Lo, addBSplineCurve(gridWing[0], `${sideName}_TE_Lower`));
+      const edgeTE_Up = addEdge(pRootTE_Up, pTipTE_Up, addBSplineCurve(gridWing[2 * numChord], `${sideName}_TE_Upper`));
+      
+      const edgeRootProfile = addEdge(pRootTE_Lo, pRootTE_Up, addBSplineCurve(gridSpanWing[0], `${sideName}_Root_Profile`));
+      const edgeTipProfile = addEdge(pTipTE_Lo, pTipTE_Up, addBSplineCurve(gridSpanWing[totalSpanSections], `${sideName}_Tip_Profile`));
 
-      const edgeTipLo = addEdge(pTipLE, pTipTE_Lo, addBSplineCurve(gridSpanLower[totalSpanSections], `${sideName}_Tip_Lower`));
-      const edgeTE_Lo = addEdge(pRootTE_Lo, pTipTE_Lo, addBSplineCurve(gridLower[numChord], `${sideName}_TE_Lower`));
-      const edgeRootLo = addEdge(pRootLE, pRootTE_Lo, addBSplineCurve(gridSpanLower[0], `${sideName}_Root_Lower`));
+      const edgeRootTE = addEdge(pRootTE_Lo, pRootTE_Up);
+      const edgeTipTE = addEdge(pTipTE_Lo, pTipTE_Up);
 
-      const edgeRootTE = addEdge(pRootTE_Up, pRootTE_Lo);
-      const edgeTipTE = addEdge(pTipTE_Up, pTipTE_Lo);
-
-      // Consistent Counter-Clockwise Loops
-      const loopUp = isRight
-        ? addEdgeLoop([
-            addOrientedEdge(edgeLE, true),
-            addOrientedEdge(edgeTipUp, true),
-            addOrientedEdge(edgeTE_Up, false),
-            addOrientedEdge(edgeRootUp, false),
-          ])
-        : addEdgeLoop([
-            addOrientedEdge(edgeRootUp, true),
-            addOrientedEdge(edgeTE_Up, true),
-            addOrientedEdge(edgeTipUp, false),
-            addOrientedEdge(edgeLE, false),
-          ]);
-
-      const loopLo = isRight
-        ? addEdgeLoop([
-            addOrientedEdge(edgeRootLo, true),
-            addOrientedEdge(edgeTE_Lo, true),
-            addOrientedEdge(edgeTipLo, false),
-            addOrientedEdge(edgeLE, false),
-          ])
-        : addEdgeLoop([
-            addOrientedEdge(edgeLE, true),
-            addOrientedEdge(edgeTipLo, true),
-            addOrientedEdge(edgeTE_Lo, false),
-            addOrientedEdge(edgeRootLo, false),
-          ]);
+      // Loop for Unified Wing Skin
+      const loopWing = addEdgeLoop([
+        addOrientedEdge(edgeRootProfile, true),
+        addOrientedEdge(edgeTE_Up, true),
+        addOrientedEdge(edgeTipProfile, false),
+        addOrientedEdge(edgeTE_Lo, false),
+      ]);
 
       // Root Cap
-      const rootPlane = addPlaneSurface(pRootLE, { x: 0, y: isVertical ? 0 : -sideMult, z: isVertical ? -1 : 0 });
+      let rNx = 0, rNy = isVertical ? 0 : -sideMult, rNz = isVertical ? -1 : 0;
+      const rootPlane = addPlaneSurface(pRootTE_Lo, { x: rNx, y: rNy, z: rNz });
       const loopRoot = isRight
-        ? addEdgeLoop([
-            addOrientedEdge(edgeRootLo, true),
-            addOrientedEdge(edgeRootTE, false),
-            addOrientedEdge(edgeRootUp, false),
-          ])
-        : addEdgeLoop([
-            addOrientedEdge(edgeRootUp, true),
-            addOrientedEdge(edgeRootTE, true),
-            addOrientedEdge(edgeRootLo, false),
-          ]);
+        ? addEdgeLoop([addOrientedEdge(edgeRootProfile, true), addOrientedEdge(edgeRootTE, false)])
+        : addEdgeLoop([addOrientedEdge(edgeRootTE, true), addOrientedEdge(edgeRootProfile, false)]);
 
       // Tip Cap
-      const tipPlane = addPlaneSurface(pTipLE, { x: 0, y: isVertical ? 0 : sideMult, z: isVertical ? 1 : 0 });
-      const loopTip = isRight
-        ? addEdgeLoop([
-            addOrientedEdge(edgeTipUp, true),
-            addOrientedEdge(edgeTipTE, true),
-            addOrientedEdge(edgeTipLo, false),
-          ])
-        : addEdgeLoop([
-            addOrientedEdge(edgeTipLo, true),
-            addOrientedEdge(edgeTipTE, false),
-            addOrientedEdge(edgeTipUp, false),
-          ]);
+      // Calculate mathematically exact outward normal using cross product of geometry points
+      const ptTipLE = gridWing[numChord][totalSpanSections];
+      const ptPrevLE = gridWing[numChord][totalSpanSections - 1];
+      const vSpan = { x: ptTipLE.x - ptPrevLE.x, y: ptTipLE.y - ptPrevLE.y, z: ptTipLE.z - ptPrevLE.z };
 
-      // Trailing Edge closure
-      const tePlane = addPlaneSurface(pRootTE_Up, { x: 1, y: 0, z: 0 });
-      const loopTE = isRight
-        ? addEdgeLoop([
-            addOrientedEdge(edgeRootTE, true),
-            addOrientedEdge(edgeTE_Lo, true),
-            addOrientedEdge(edgeTipTE, false),
-            addOrientedEdge(edgeTE_Up, false),
-          ])
-        : addEdgeLoop([
-            addOrientedEdge(edgeTipTE, true),
-            addOrientedEdge(edgeTE_Lo, false),
-            addOrientedEdge(edgeRootTE, false),
-            addOrientedEdge(edgeTE_Up, true),
-          ]);
+      const v1 = { x: pTipTE_Up.x - ptTipLE.x, y: pTipTE_Up.y - ptTipLE.y, z: pTipTE_Up.z - ptTipLE.z };
+      const v2 = { x: pTipTE_Lo.x - ptTipLE.x, y: pTipTE_Lo.y - ptTipLE.y, z: pTipTE_Lo.z - ptTipLE.z };
 
-      // Determine sameSense and loop for upper/lower faces based on side/vertical properties
-      let sameSenseUp = true;
-      let sameSenseLo = false;
-      let faceUpLoop = loopUp;
-      let faceLoLoop = loopLo;
+      let tNx = v1.y * v2.z - v1.z * v2.y;
+      let tNy = v1.z * v2.x - v1.x * v2.z;
+      let tNz = v1.x * v2.y - v1.y * v2.x;
 
-      if (isVertical) {
-        sameSenseUp = false;
-        sameSenseLo = true;
-        faceUpLoop = loopLo;
-        faceLoLoop = loopUp;
-      } else {
-        const isRightSide = (sideMult === 1);
-        sameSenseUp = isRightSide;
-        sameSenseLo = !isRightSide;
+      const dot = tNx * vSpan.x + tNy * vSpan.y + tNz * vSpan.z;
+      if (dot < 0) {
+        tNx = -tNx; tNy = -tNy; tNz = -tNz;
       }
+      
+      const tNLen = Math.hypot(tNx, tNy, tNz);
+      if (tNLen > 0) { tNx /= tNLen; tNy /= tNLen; tNz /= tNLen; }
+      
+      const tipPlane = addPlaneSurface(pTipTE_Lo, { x: tNx, y: tNy, z: tNz });
+      const loopTip = isRight
+        ? addEdgeLoop([addOrientedEdge(edgeTipProfile, false), addOrientedEdge(edgeTipTE, true)])
+        : addEdgeLoop([addOrientedEdge(edgeTipProfile, true), addOrientedEdge(edgeTipTE, false)]);
 
-      const faceUp = addFace(surfUpId, faceUpLoop, `${sideName}_Upper_Face`, sameSenseUp);
-      const faceLo = addFace(surfLoId, faceLoLoop, `${sideName}_Lower_Face`, sameSenseLo);
-      const faceRoot = addFace(rootPlane, loopRoot, `${sideName}_Root_Cap`);
-      const faceTip = addFace(tipPlane, loopTip, `${sideName}_Tip_Cap`);
-      const faceTE = addFace(tePlane, loopTE, `${sideName}_TE_Cap`);
+      // TE Surface closure
+      const surfTeGrid = isRight 
+        ? [gridWing[2 * numChord], gridWing[0]] 
+        : [gridWing[0], gridWing[2 * numChord]];
+      
+      const teFaceGridId = addBSplineSurface(surfTeGrid, 1, 3, `${sideName}_TE_Surface`);
+      
+      const teEdge_U0 = isRight ? edgeTE_Up : edgeTE_Lo;
+      const teEdge_U1 = isRight ? edgeTE_Lo : edgeTE_Up;
+      const loopTE = addEdgeLoop([
+        addOrientedEdge(teEdge_U0, true),
+        addOrientedEdge(edgeTipTE, isRight ? true : false),
+        addOrientedEdge(teEdge_U1, false),
+        addOrientedEdge(edgeRootTE, isRight ? false : true),
+      ]);
+
+      const faces: number[] = [];
+      const sameSense = false; // Always false since both use transposed gridSpanWing
+      faces.push(addFace(surfWingId, loopWing, `${sideName}_Skin`, sameSense));
+      faces.push(addFace(rootPlane, loopRoot, `${sideName}_Root_Cap`, true));
+      faces.push(addFace(tipPlane, loopTip, `${sideName}_Tip_Cap`, true));
+      faces.push(addFace(teFaceGridId, loopTE, `${sideName}_TE_Cap`, true));
 
       const wingShellId = entityId++;
-      lines.push(`#${wingShellId} = CLOSED_SHELL('${sideName}_Shell',(#${faceUp},#${faceLo},#${faceRoot},#${faceTip},#${faceTE}));`);
+      lines.push(`#${wingShellId} = CLOSED_SHELL('${sideName}_Shell',(#${faces.join(',#')}));`);
 
       const wingSolidId = entityId++;
       lines.push(`#${wingSolidId} = MANIFOLD_SOLID_BREP('${sideName}',#${wingShellId});`);
@@ -1129,77 +1187,460 @@ export function exportAircraftSTEP(
         const engName = (eng.name || `Engine_${eIdx + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
         const length = (eng.length || 3.0) * 1000.0;
         const radius = ((eng.diameter || 1.5) / 2) * 1000.0;
+        const isPropeller = eng.type === 'propeller';
         const attach = computeEngineWingAttachment(eng, model.wings);
         const posX = attach.actualPos[0] * 1000.0;
         const posY = attach.actualPos[1] * 1000.0;
         const posZ = attach.actualPos[2] * 1000.0;
+        const wallThick = radius * (isPropeller ? 0.07 : 0.085);
 
-        const numU = 8;
-        const numV = 16;
-        const gridPort: Point3D[][] = [];
-        const gridStbd: Point3D[][] = [];
+        const numU = 16;
+        const numV = 32;
 
+        const buildRevolvedSurface = (
+          profile: { x: number; r: number }[],
+          surfName: string,
+          solidName: string,
+        ) => {
+          const nU = profile.length - 1;
+          const grid: Point3D[][] = [];
+          for (let u = 0; u <= nU; u++) {
+            const row: Point3D[] = [];
+            for (let v = 0; v <= numV; v++) {
+              const angle = (v / numV) * Math.PI * 2;
+              row.push({
+                x: profile[u].x,
+                y: posY + profile[u].r * Math.sin(angle),
+                z: posZ + profile[u].r * Math.cos(angle),
+              });
+            }
+            grid.push(row);
+          }
+
+          const surfId = addBSplineSurface(grid, 3, 3, surfName);
+
+          // Seam edges along U direction
+          const seam0 = addEdge(grid[0][0], grid[nU][0], addBSplineCurve(grid.map((r) => r[0]), `${surfName}_Seam0`));
+          const seamN = addEdge(grid[0][numV], grid[nU][numV], addBSplineCurve(grid.map((r) => r[numV]), `${surfName}_SeamN`));
+          const frontEdge = addEdge(grid[0][0], grid[0][numV], addBSplineCurve(grid[0], `${surfName}_Front`));
+          const rearEdge = addEdge(grid[nU][0], grid[nU][numV], addBSplineCurve(grid[nU], `${surfName}_Rear`));
+
+          const loop = addEdgeLoop([
+            addOrientedEdge(frontEdge, true),
+            addOrientedEdge(seamN, true),
+            addOrientedEdge(rearEdge, false),
+            addOrientedEdge(seam0, false),
+          ]);
+
+          // Front cap
+          const frontPlane = addPlaneSurface(grid[0][0], { x: -1, y: 0, z: 0 });
+          const frontCapEdge = addEdge(grid[0][0], grid[0][0], addBSplineCurve(grid[0], `${surfName}_FrontCap`));
+          const loopFrontCap = addEdgeLoop([addOrientedEdge(frontCapEdge, true)]);
+
+          // Rear cap
+          const rearPlane = addPlaneSurface(grid[nU][0], { x: 1, y: 0, z: 0 });
+          const rearCapEdge = addEdge(grid[nU][0], grid[nU][0], addBSplineCurve(grid[nU], `${surfName}_RearCap`));
+          const loopRearCap = addEdgeLoop([addOrientedEdge(rearCapEdge, false)]);
+
+          const faceSurf = addFace(surfId, loop, `${surfName}_Face`, false);
+          const faceFront = addFace(frontPlane, loopFrontCap, `${surfName}_Front_Cap`, true);
+          const faceRear = addFace(rearPlane, loopRearCap, `${surfName}_Rear_Cap`, true);
+
+          const shellId = entityId++;
+          lines.push(`#${shellId} = CLOSED_SHELL('${solidName}_Shell',(#${faceSurf},#${faceFront},#${faceRear}));`);
+          const solidId = entityId++;
+          lines.push(`#${solidId} = MANIFOLD_SOLID_BREP('${solidName}',#${shellId});`);
+          solidBrepIds.push(solidId);
+        };
+
+        const addBoxSolid = (
+          p0: Point3D, p1: Point3D, p2: Point3D, p3: Point3D,
+          p4: Point3D, p5: Point3D, p6: Point3D, p7: Point3D,
+          solidName: string
+        ) => {
+          // Compute true plane normals using cross products to support arbitrary rotations
+          const getOutwardNormal = (a: Point3D, b: Point3D, c: Point3D) => {
+            const ux = b.x - a.x; const uy = b.y - a.y; const uz = b.z - a.z;
+            const vx = c.x - a.x; const vy = c.y - a.y; const vz = c.z - a.z;
+            const nx = uy * vz - uz * vy;
+            const ny = uz * vx - ux * vz;
+            const nz = ux * vy - uy * vx;
+            const len = Math.hypot(nx, ny, nz);
+            return { x: nx / len, y: ny / len, z: nz / len };
+          };
+
+          const btmNorm = getOutwardNormal(p0, p3, p1);
+          const topNorm = getOutwardNormal(p4, p5, p7);
+          const frontNorm = getOutwardNormal(p0, p4, p3);
+          const rearNorm = getOutwardNormal(p1, p2, p5);
+          const leftNorm = getOutwardNormal(p0, p4, p1);
+          const rightNorm = getOutwardNormal(p3, p2, p7);
+
+          // Bottom face
+          const eBtm01 = addEdge(p0, p1); const eBtm12 = addEdge(p1, p2);
+          const eBtm23 = addEdge(p2, p3); const eBtm30 = addEdge(p3, p0);
+          const btmPlane = addPlaneSurface(p0, btmNorm);
+          const loopBtm = addEdgeLoop([
+            addOrientedEdge(eBtm30, false),
+            addOrientedEdge(eBtm23, false),
+            addOrientedEdge(eBtm12, false),
+            addOrientedEdge(eBtm01, false)
+          ]);
+
+          // Top face
+          const eTop45 = addEdge(p4, p5); const eTop56 = addEdge(p5, p6);
+          const eTop67 = addEdge(p6, p7); const eTop74 = addEdge(p7, p4);
+          const topPlane = addPlaneSurface(p4, topNorm);
+          const loopTop = addEdgeLoop([
+            addOrientedEdge(eTop45, true),
+            addOrientedEdge(eTop56, true),
+            addOrientedEdge(eTop67, true),
+            addOrientedEdge(eTop74, true)
+          ]);
+
+          // Vertical edges
+          const eV04 = addEdge(p0, p4); const eV15 = addEdge(p1, p5);
+          const eV26 = addEdge(p2, p6); const eV37 = addEdge(p3, p7);
+
+          // Front face
+          const frontPlane = addPlaneSurface(p0, frontNorm);
+          const loopFront = addEdgeLoop([
+            addOrientedEdge(eBtm30, false),
+            addOrientedEdge(eV37, true),
+            addOrientedEdge(eTop74, true),
+            addOrientedEdge(eV04, false)
+          ]);
+
+          // Rear face
+          const rearPlane = addPlaneSurface(p1, rearNorm);
+          const loopRear = addEdgeLoop([
+            addOrientedEdge(eV15, true),
+            addOrientedEdge(eTop56, true),
+            addOrientedEdge(eV26, false),
+            addOrientedEdge(eBtm12, false)
+          ]);
+
+          // Left face
+          const leftPlane = addPlaneSurface(p0, leftNorm);
+          const loopLeft = addEdgeLoop([
+            addOrientedEdge(eBtm01, true),
+            addOrientedEdge(eV15, true),
+            addOrientedEdge(eTop45, false),
+            addOrientedEdge(eV04, false)
+          ]);
+
+          // Right face
+          const rightPlane = addPlaneSurface(p3, rightNorm);
+          const loopRight = addEdgeLoop([
+            addOrientedEdge(eBtm23, false),
+            addOrientedEdge(eV26, true),
+            addOrientedEdge(eTop67, true),
+            addOrientedEdge(eV37, false)
+          ]);
+
+          const faces = [
+            addFace(btmPlane, loopBtm, `${solidName}_Bottom`, true),
+            addFace(topPlane, loopTop, `${solidName}_Top`, true),
+            addFace(frontPlane, loopFront, `${solidName}_Front`, true),
+            addFace(rearPlane, loopRear, `${solidName}_Rear`, true),
+            addFace(leftPlane, loopLeft, `${solidName}_Left`, true),
+            addFace(rightPlane, loopRight, `${solidName}_Right`, true),
+          ];
+
+          const shellId = entityId++;
+          lines.push(`#${shellId} = CLOSED_SHELL('${solidName}_Shell',(#${faces.join(',#')}));`);
+          const solidId = entityId++;
+          lines.push(`#${solidId} = MANIFOLD_SOLID_BREP('${solidName}',#${shellId});`);
+          solidBrepIds.push(solidId);
+        };
+
+        // ═══ 1. OUTER COWL PROFILE ═══
+        const outerProfile: { x: number; r: number }[] = [];
         for (let u = 0; u <= numU; u++) {
           const t = u / numU;
-          const x = posX + t * length - length / 2;
-          const rProfile = radius * (0.93 + 0.07 * Math.sin(t * Math.PI));
-
-          const rowP: Point3D[] = [];
-          const rowS: Point3D[] = [];
-
-          for (let v = 0; v <= numV / 2; v++) {
-            const thP = (v / (numV / 2)) * Math.PI;
-            rowP.push({ x, y: posY + Math.sin(thP) * rProfile, z: posZ + Math.cos(thP) * rProfile });
-
-            const thS = Math.PI + (v / (numV / 2)) * Math.PI;
-            rowS.push({ x, y: posY + Math.sin(thS) * rProfile, z: posZ + Math.cos(thS) * rProfile });
+          const x = posX + t * length;
+          let rScale = 1.0;
+          if (t < 0.06) {
+            rScale = 0.94 + 0.06 * Math.sin((t / 0.06) * (Math.PI / 2));
+          } else if (t < 0.15) {
+            rScale = 1.0;
+          } else if (t > 0.68) {
+            const nt = (t - 0.68) / 0.32;
+            rScale = 1.0 - 0.20 * Math.pow(nt, 1.35);
           }
-          gridPort.push(rowP);
-          gridStbd.push(rowS);
+          outerProfile.push({ x, r: radius * rScale });
         }
 
-        const surfP = addBSplineSurface(gridPort, 3, 3, `${engName}_Port`);
-        const surfS = addBSplineSurface(gridStbd, 3, 3, `${engName}_Stbd`);
+        // ═══ 2. INNER DUCT PROFILE ═══
+        const innerProfile: { x: number; r: number }[] = [];
+        for (let u = 0; u <= numU; u++) {
+          const t = u / numU;
+          const x = posX + t * length;
+          const outerR = outerProfile[u].r;
+          let innerR = outerR - wallThick;
+          if (t < 0.08) {
+            const nt = t / 0.08;
+            innerR = outerR - wallThick * (0.55 + 0.45 * Math.sin(nt * Math.PI * 0.5));
+          } else if (t > 0.75) {
+            innerR = outerR - wallThick * 0.75;
+          }
+          innerProfile.push({ x, r: Math.max(40, innerR) });
+        }
 
-        const edgeTop = addEdge(gridPort[0][0], gridPort[numU][0], addBSplineCurve(gridPort.map((r) => r[0])));
-        const edgeRearP = addEdge(gridPort[numU][0], gridPort[numU][numV / 2], addBSplineCurve(gridPort[numU]));
-        const edgeBtm = addEdge(gridPort[0][numV / 2], gridPort[numU][numV / 2], addBSplineCurve(gridPort.map((r) => r[numV / 2])));
-        const edgeFrontP = addEdge(gridPort[0][0], gridPort[0][numV / 2], addBSplineCurve(gridPort[0]));
+        // ═══ 3. MERGE INTO SINGLE CONTINUOUS U-PROFILE ═══
+        const nacelleProfile: { x: number; r: number }[] = [];
+        const lip_radius = wallThick / 2;
+        const center_r = (outerProfile[0].r + innerProfile[0].r) / 2;
 
-        const loopP = addEdgeLoop([
-          addOrientedEdge(edgeTop, true),
-          addOrientedEdge(edgeRearP, true),
-          addOrientedEdge(edgeBtm, false),
-          addOrientedEdge(edgeFrontP, false),
+        // 3a. Inner duct from rear (u=numU) to front (u=0)
+        for (let u = numU; u >= 0; u--) {
+          const stationT = u / numU;
+          // Smoothly tilt the inner rear by 15mm to make the rear cap conical (bypassing CAD plane simplifier bug)
+          const x_offset = 15.0 * Math.pow(stationT, 2);
+          const x = posX + lip_radius + stationT * (length - lip_radius) - x_offset;
+          nacelleProfile.push({ x, r: innerProfile[u].r });
+        }
+
+        // 3b. Semicircular front lip (8 sections)
+        for (let u = 1; u <= 7; u++) {
+          const t = u / 8;
+          const theta = Math.PI - t * Math.PI; // PI down to 0
+          const x = posX + lip_radius * (1 - Math.sin(theta));
+          const r = center_r + lip_radius * Math.cos(theta);
+          nacelleProfile.push({ x, r });
+        }
+
+        // 3c. Outer cowl from front (u=0) to rear (u=numU)
+        for (let u = 0; u <= numU; u++) {
+          const stationT = u / numU;
+          const x = posX + lip_radius + stationT * (length - lip_radius);
+          nacelleProfile.push({ x, r: outerProfile[u].r });
+        }
+
+        // Build full-circle grid for the single revolved nacelle surface
+        const nU = nacelleProfile.length - 1;
+        const gridNacelle: Point3D[][] = [];
+        for (let u = 0; u <= nU; u++) {
+          const row: Point3D[] = [];
+          for (let v = 0; v <= numV; v++) {
+            const angle = (v / numV) * Math.PI * 2;
+            row.push({
+              x: nacelleProfile[u].x,
+              y: posY + nacelleProfile[u].r * Math.sin(angle),
+              z: posZ + nacelleProfile[u].r * Math.cos(angle),
+            });
+          }
+          gridNacelle.push(row);
+        }
+
+        const surfNacId = addBSplineSurface(gridNacelle, 3, 3, `${engName}_Nacelle_Surf`);
+
+        // Rear conical cap face (washer connecting inner rear to outer rear)
+        const lipU = 8;
+        const rearLipProfile: { x: number; r: number }[] = [];
+        for (let u = 0; u <= lipU; u++) {
+          const t = u / lipU;
+          const r = nacelleProfile[0].r + (nacelleProfile[nU].r - nacelleProfile[0].r) * t;
+          const x = nacelleProfile[0].x + (nacelleProfile[nU].x - nacelleProfile[0].x) * t;
+          rearLipProfile.push({ x, r });
+        }
+
+        const gridRearLip: Point3D[][] = [];
+        for (let u = 0; u <= lipU; u++) {
+          const row: Point3D[] = [];
+          for (let v = 0; v <= numV; v++) {
+            const angle = (v / numV) * Math.PI * 2;
+            row.push({
+              x: rearLipProfile[u].x,
+              y: posY + rearLipProfile[u].r * Math.sin(angle),
+              z: posZ + rearLipProfile[u].r * Math.cos(angle),
+            });
+          }
+          gridRearLip.push(row);
+        }
+
+        const surfRearLipId = addBSplineSurface(gridRearLip, 3, 3, `${engName}_RearLip_Surf`);
+
+        // Define boundary edges
+        const edgeInnerRear = addEdge(gridNacelle[0][0], gridNacelle[0][numV], addBSplineCurve(gridNacelle[0], `${engName}_Inner_Rear`));
+        const edgeOuterRear = addEdge(gridNacelle[nU][0], gridNacelle[nU][numV], addBSplineCurve(gridNacelle[nU], `${engName}_Outer_Rear`));
+        const edgeSeam0 = addEdge(gridNacelle[0][0], gridNacelle[nU][0], addBSplineCurve(gridNacelle.map((r) => r[0]), `${engName}_Seam0`));
+        const edgeSeamN = addEdge(gridNacelle[0][numV], gridNacelle[nU][numV], addBSplineCurve(gridNacelle.map((r) => r[numV]), `${engName}_SeamN`));
+
+        const edgeRearLipSeam0 = addEdge(gridRearLip[0][0], gridRearLip[lipU][0], addBSplineCurve(gridRearLip.map((r) => r[0]), `${engName}_RearLip_Seam0`));
+        const edgeRearLipSeamN = addEdge(gridRearLip[0][numV], gridRearLip[lipU][numV], addBSplineCurve(gridRearLip.map((r) => r[numV]), `${engName}_RearLip_SeamN`));
+
+        // Define loops (manifold watertight orientations)
+        const loopNac = addEdgeLoop([
+          addOrientedEdge(edgeInnerRear, true),
+          addOrientedEdge(edgeSeamN, true),
+          addOrientedEdge(edgeOuterRear, false),
+          addOrientedEdge(edgeSeam0, false),
         ]);
 
-        const edgeRearS = addEdge(gridStbd[numU][0], gridStbd[numU][numV / 2], addBSplineCurve(gridStbd[numU]));
-        const edgeFrontS = addEdge(gridStbd[0][0], gridStbd[0][numV / 2], addBSplineCurve(gridStbd[0]));
-
-        const loopS = addEdgeLoop([
-          addOrientedEdge(edgeBtm, true),
-          addOrientedEdge(edgeRearS, true),
-          addOrientedEdge(edgeTop, false),
-          addOrientedEdge(edgeFrontS, false),
+        const loopRearLip = addEdgeLoop([
+          addOrientedEdge(edgeOuterRear, true),
+          addOrientedEdge(edgeRearLipSeamN, true),
+          addOrientedEdge(edgeInnerRear, false),
+          addOrientedEdge(edgeRearLipSeam0, false),
         ]);
 
-        const frontPlane = addPlaneSurface(gridPort[0][0], { x: -1, y: 0, z: 0 });
-        const loopFront = addEdgeLoop([addOrientedEdge(edgeFrontP, true), addOrientedEdge(edgeFrontS, true)]);
+        // Construct faces
+        const faceNac = addFace(surfNacId, loopNac, `${engName}_Nacelle_Face`, true);
+        const faceRearLip = addFace(surfRearLipId, loopRearLip, `${engName}_RearLip_Face`, false);
 
-        const rearPlane = addPlaneSurface(gridPort[numU][0], { x: 1, y: 0, z: 0 });
-        const loopRear = addEdgeLoop([addOrientedEdge(edgeRearS, false), addOrientedEdge(edgeRearP, false)]);
+        const nacelleShellId = entityId++;
+        lines.push(`#${nacelleShellId} = CLOSED_SHELL('${engName}_Nacelle_Shell',(#${faceNac},#${faceRearLip}));`);
 
-        const faceP = addFace(surfP, loopP, `${engName}_Port_Face`);
-        const faceS = addFace(surfS, loopS, `${engName}_Stbd_Face`);
-        const faceF = addFace(frontPlane, loopFront, `${engName}_Front_Cap`);
-        const faceR = addFace(rearPlane, loopRear, `${engName}_Rear_Cap`);
+        const nacelleSolidId = entityId++;
+        lines.push(`#${nacelleSolidId} = MANIFOLD_SOLID_BREP('${engName}_Nacelle',#${nacelleShellId});`);
+        solidBrepIds.push(nacelleSolidId);
 
-        const engShellId = entityId++;
-        lines.push(`#${engShellId} = CLOSED_SHELL('${engName}_Shell',(#${faceP},#${faceS},#${faceF},#${faceR}));`);
+        // ═══ 5. SPINNER CONE — matches engineGenerator.ts lines 356-431 ═══
+        const spinnerRad = radius * (isPropeller ? 0.38 : 0.32);
+        const spinnerLen = length * (isPropeller ? 0.35 : 0.28);
+        const spinnerStartX = isPropeller ? posX - length * 0.12 : posX + length * 0.05;
+        const spinnerU = 16;
 
-        const engSolidId = entityId++;
-        lines.push(`#${engSolidId} = MANIFOLD_SOLID_BREP('${engName}',#${engShellId});`);
-        solidBrepIds.push(engSolidId);
+        const spinnerProfile: { x: number; r: number }[] = [];
+        spinnerProfile.push({ x: spinnerStartX, r: 0.5 });
+        for (let u = 1; u <= spinnerU; u++) {
+          const t = u / spinnerU;
+          const x = spinnerStartX + t * spinnerLen;
+          const rFrac = Math.sqrt(Math.max(0, 1 - Math.pow(1 - t, 2)));
+          const currentR = Math.max(5, spinnerRad * rFrac);
+          spinnerProfile.push({ x, r: currentR });
+        }
+        buildRevolvedSurface(spinnerProfile, `${engName}_Spinner`, `${engName}_Spinner_Cone`);
+
+        // ═══ 6. AFT CORE EXHAUST PLUG — matches engineGenerator.ts lines 436-513 ═══
+        if (!isPropeller) {
+          const plugRad = radius * 0.32;
+          const plugStartX = posX + length * 0.65;
+          const plugEndX = posX + length * 1.04;
+          const plugLen = plugEndX - plugStartX;
+          const plugU = 12;
+
+          const plugProfile: { x: number; r: number }[] = [];
+          for (let u = 0; u < plugU; u++) {
+            const t = u / plugU;
+            const x = plugStartX + t * plugLen;
+            const rFrac = 1.0 - t;
+            const currentR = Math.max(5, plugRad * rFrac);
+            plugProfile.push({ x, r: currentR });
+          }
+          // Apex tip
+          plugProfile.push({ x: plugEndX, r: 0.5 });
+          buildRevolvedSurface(plugProfile, `${engName}_AftPlug`, `${engName}_Exhaust_Plug`);
+        }
+
+        // ═══ 7. PYLON STRUT — matches engineGenerator.ts lines 121-138 ═══
+        if (eng.pylonHeight > 0 || attach.isWingMounted) {
+          const pylonWidth = Math.max(60, (eng.pylonWidth || 0.2) * 1000.0);
+          const pylonLen = length * 0.7;
+
+          const pylonBottomZ = posZ + radius * 0.95;
+          const pylonTopZ = attach.actualPylonZTop * 1000.0;
+          const pH = Math.max(80, Math.abs(pylonTopZ - pylonBottomZ));
+          const pCenterZ = (pylonBottomZ + pylonTopZ) / 2;
+          const pCenterX = posX + length * 0.45;
+
+          const hw = pylonWidth / 2;
+          const hh = pH / 2;
+          const hl = pylonLen / 2;
+
+          const p0: Point3D = { x: pCenterX - hl, y: posY - hw, z: pCenterZ - hh };
+          const p1: Point3D = { x: pCenterX + hl, y: posY - hw, z: pCenterZ - hh };
+          const p2: Point3D = { x: pCenterX + hl, y: posY + hw, z: pCenterZ - hh };
+          const p3: Point3D = { x: pCenterX - hl, y: posY + hw, z: pCenterZ - hh };
+          const p4: Point3D = { x: pCenterX - hl, y: posY - hw, z: pCenterZ + hh };
+          const p5: Point3D = { x: pCenterX + hl, y: posY - hw, z: pCenterZ + hh };
+          const p6: Point3D = { x: pCenterX + hl, y: posY + hw, z: pCenterZ + hh };
+          const p7: Point3D = { x: pCenterX - hl, y: posY + hw, z: pCenterZ + hh };
+
+          addBoxSolid(p0, p1, p2, p3, p4, p5, p6, p7, `${engName}_Pylon`);
+        }
+
+        // ═══ 8. FAN OR PROPELLER BLADES — matches engineGenerator.ts lines 141-196 ═══
+        if (isPropeller) {
+          const numBlades = eng.fanBlades || 4;
+          const bladeLen = radius * 1.6;
+          const bladeW = radius * 0.14;
+          const bladeThick = radius * 0.03;
+
+          for (let b = 0; b < numBlades; b++) {
+            const angle = (b / numBlades) * 2 * Math.PI;
+            const pitch = 0.35; // rad
+
+            const buildBladeCorner = (xLoc: number, rLoc: number, tLoc: number): Point3D => {
+              const x_pitched = xLoc * Math.cos(pitch) - tLoc * Math.sin(pitch);
+              const t_pitched = xLoc * Math.sin(pitch) + tLoc * Math.cos(pitch);
+              return {
+                x: posX - length * 0.05 + x_pitched,
+                y: posY + rLoc * Math.sin(angle) + t_pitched * Math.cos(angle),
+                z: posZ + rLoc * Math.cos(angle) - t_pitched * Math.sin(angle),
+              };
+            };
+
+            const hw = bladeW / 2;
+            const ht = bladeThick / 2;
+            const hR = radius * 0.38 * 0.92;
+            const tR = bladeLen;
+
+            const bp0 = buildBladeCorner(-hw, hR, -ht);
+            const bp1 = buildBladeCorner(hw, hR, -ht);
+            const bp2 = buildBladeCorner(hw, hR, ht);
+            const bp3 = buildBladeCorner(-hw, hR, ht);
+            const bp4 = buildBladeCorner(-hw, tR, -ht);
+            const bp5 = buildBladeCorner(hw, tR, -ht);
+            const bp6 = buildBladeCorner(hw, tR, ht);
+            const bp7 = buildBladeCorner(-hw, tR, ht);
+
+            addBoxSolid(bp0, bp1, bp2, bp3, bp4, bp5, bp6, bp7, `${engName}_Blade_${b + 1}`);
+          }
+        } else {
+          // Turbofan / Turbojet / EDF: Fan blades mounted INSIDE the hollow intake duct
+          const numBlades = Math.max(12, eng.fanBlades || 18);
+          const spinnerRad = radius * 0.32;
+          const innerDuctRadAtFan = (radius * 0.98) - wallThick;
+          const hubRad = spinnerRad * 0.92;
+          const bladeSpan = Math.max(20, innerDuctRadAtFan - hubRad);
+          const bladeW = radius * 0.08;
+          const bladeThick = Math.max(8, radius * 0.015);
+
+          const fanStationX = posX + length * 0.16;
+
+          for (let b = 0; b < numBlades; b++) {
+            const angle = (b / numBlades) * 2 * Math.PI;
+            const pitch = 0.42; // rad
+
+            const buildBladeCorner = (xLoc: number, rLoc: number, tLoc: number): Point3D => {
+              const x_pitched = xLoc * Math.cos(pitch) - tLoc * Math.sin(pitch);
+              const t_pitched = xLoc * Math.sin(pitch) + tLoc * Math.cos(pitch);
+              return {
+                x: fanStationX + x_pitched,
+                y: posY + rLoc * Math.sin(angle) + t_pitched * Math.cos(angle),
+                z: posZ + rLoc * Math.cos(angle) - t_pitched * Math.sin(angle),
+              };
+            };
+
+            const hw = bladeW / 2;
+            const ht = bladeThick / 2;
+            const hR = hubRad;
+            const tR = hubRad + bladeSpan;
+
+            const bp0 = buildBladeCorner(-hw, hR, -ht);
+            const bp1 = buildBladeCorner(hw, hR, -ht);
+            const bp2 = buildBladeCorner(hw, hR, ht);
+            const bp3 = buildBladeCorner(-hw, hR, ht);
+            const bp4 = buildBladeCorner(-hw, tR, -ht);
+            const bp5 = buildBladeCorner(hw, tR, -ht);
+            const bp6 = buildBladeCorner(hw, tR, ht);
+            const bp7 = buildBladeCorner(-hw, tR, ht);
+
+            addBoxSolid(bp0, bp1, bp2, bp3, bp4, bp5, bp6, bp7, `${engName}_FanBlade_${b + 1}`);
+          }
+        }
       });
   }
 
@@ -1249,7 +1690,7 @@ export function exportAircraftIGES(
 
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-  const modelName = (model?.name || 'AeroCAD_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const modelName = (model?.name || 'TurboDESiM_Aero_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   const sLines: string[] = [];
   const gLines: string[] = [];
@@ -1257,9 +1698,9 @@ export function exportAircraftIGES(
   const pLines: string[] = [];
 
   // 1. S (Start) Section
-  sLines.push(formatIGESLine('AeroCAD Studio IGES 5.3 3D CAD Model Export', 'S', 1));
+  sLines.push(formatIGESLine('TurboDESiM Aero IGES 5.3 3D CAD Model Export', 'S', 1));
   sLines.push(formatIGESLine(`Aircraft Model: ${modelName} | Units: METRES`, 'S', 2));
-  sLines.push(formatIGESLine('Generated by AeroCAD Studio CAD Exporter Engine', 'S', 3));
+  sLines.push(formatIGESLine('Generated by TurboDESiM Aero CAD Exporter Engine', 'S', 3));
 
   // 2. G (Global) Section
   const gParams = [
@@ -1267,8 +1708,8 @@ export function exportAircraftIGES(
     '1H;',
     `8H${modelName.slice(0, 8)}`,
     `12H${filename.slice(0, 12)}`,
-    '14HAeroCAD_Studio',
-    '14HAeroCAD_v2.0',
+    '15HTurboDESiM_Aero',
+    '15HTurboDESiM_v2.0',
     '32',
     '38',
     '6',
@@ -1282,7 +1723,7 @@ export function exportAircraftIGES(
     `15H${dateStr}`,
     '1.0E-04',
     '1000.0',
-    '12HAeroCAD User',
+    '20HTurboDESiM Aero User',
     '16HDESiM Aerospace',
     '11',
     '0',
@@ -1401,7 +1842,7 @@ export function exportAircraftParasolid(
   }
 
   const dateStr = new Date().toISOString().split('T')[0];
-  const modelName = (model?.name || 'AeroCAD_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const modelName = (model?.name || 'TurboDESiM_Aero_Aircraft').replace(/[^a-zA-Z0-9_-]/g, '_');
 
   const lines: string[] = [];
 

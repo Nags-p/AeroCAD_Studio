@@ -7,6 +7,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { BUILTIN_AIRFOILS } from '@/engine/math/naca';
 import { SectionShapeType, FuselageSection } from '@/types/aircraft';
 import { generateSectionPoints } from '@/engine/math/superellipse';
+import { MATERIALS_LIBRARY } from '@/engine/data/materials';
 
 /**
  * Reusable CAD Property Control with synchronized Slider + Editable Numeric Input Box
@@ -316,6 +317,11 @@ export function RightProperties() {
   const updateTail = useAircraftStore((state) => state.updateTail);
   const updateEngine = useAircraftStore((state) => state.updateEngine);
 
+  const canUndo = useAircraftStore((state) => state.canUndo);
+  const canRedo = useAircraftStore((state) => state.canRedo);
+  const undo = useAircraftStore((state) => state.undo);
+  const redo = useAircraftStore((state) => state.redo);
+
   const units = useUIStore((state) => state.units);
   const unitFactor = units === 'imperial' ? 3.28084 : 1.0;
   const unitLabel = units === 'imperial' ? 'ft' : 'm';
@@ -439,6 +445,22 @@ export function RightProperties() {
                 onChange={(e) => updateFuselage({ color: e.target.value })}
                 className="w-8 h-6 rounded border border-slate-300 cursor-pointer bg-transparent"
               />
+            </div>
+
+            {/* Structural Material */}
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-slate-600 font-medium flex items-center gap-1.5" title="Material selection updates weight, CG calculations and 3D rendering."><Sliders className="w-3.5 h-3.5 text-sky-600" /> Structural Material</span>
+              <select
+                value={activeFuselage.material || 'paint_glossy'}
+                onChange={(e) => updateFuselage({ material: e.target.value })}
+                className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
+              >
+                {Object.values(MATERIALS_LIBRARY).map((mat) => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.name} ({mat.density} kg/m³)
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         )}
@@ -913,6 +935,22 @@ export function RightProperties() {
                 className="w-8 h-6 rounded border border-slate-300 cursor-pointer bg-transparent"
               />
             </div>
+
+            {/* Structural Material */}
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-slate-600 font-medium flex items-center gap-1.5" title="Material selection updates weight, CG calculations and 3D rendering."><Sliders className="w-3.5 h-3.5 text-emerald-600" /> Structural Material</span>
+              <select
+                value={activeWing.material || 'paint_glossy'}
+                onChange={(e) => updateWing(activeWing.id, { material: e.target.value })}
+                className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
+              >
+                {Object.values(MATERIALS_LIBRARY).map((mat) => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.name} ({mat.density} kg/m³)
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         )}
 
@@ -1113,6 +1151,22 @@ export function RightProperties() {
                 onChange={(e) => updateTail(activeTail.id, { color: e.target.value })}
                 className="w-8 h-6 rounded border border-slate-300 cursor-pointer bg-transparent"
               />
+            </div>
+
+            {/* Structural Material */}
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-slate-600 font-medium flex items-center gap-1.5" title="Material selection updates weight, CG calculations and 3D rendering."><Sliders className="w-3.5 h-3.5 text-amber-600" /> Structural Material</span>
+              <select
+                value={activeTail.material || 'paint_glossy'}
+                onChange={(e) => updateTail(activeTail.id, { material: e.target.value })}
+                className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
+              >
+                {Object.values(MATERIALS_LIBRARY).map((mat) => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.name} ({mat.density} kg/m³)
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         )}
@@ -1335,6 +1389,22 @@ export function RightProperties() {
                 onChange={(e) => updateEngine(activeEngine.id, { color: e.target.value })}
                 className="w-8 h-6 rounded border border-slate-300 cursor-pointer bg-transparent"
               />
+            </div>
+
+            {/* Structural Material */}
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-slate-600 font-medium flex items-center gap-1.5" title="Material selection updates weight, CG calculations and 3D rendering."><Sliders className="w-3.5 h-3.5 text-purple-600" /> Structural Material</span>
+              <select
+                value={activeEngine.material || 'paint_glossy'}
+                onChange={(e) => updateEngine(activeEngine.id, { material: e.target.value })}
+                className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
+              >
+                {Object.values(MATERIALS_LIBRARY).map((mat) => (
+                  <option key={mat.id} value={mat.id}>
+                    {mat.name} ({mat.density} kg/m³)
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         )}

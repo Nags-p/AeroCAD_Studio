@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { EngineComponent, WingComponent } from '@/types/aircraft';
+import { EngineComponent, WingComponent } from '../../types/aircraft';
 
 export interface EngineAttachmentInfo {
   actualPos: [number, number, number];
@@ -91,7 +91,8 @@ export function computeEngineWingAttachment(
  */
 export function generateEngineGeometry(
   engine: EngineComponent,
-  wings?: WingComponent[]
+  wings?: WingComponent[],
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
 ): THREE.BufferGeometry {
   if (!engine || !engine.visible) return new THREE.BufferGeometry();
 
@@ -105,16 +106,16 @@ export function generateEngineGeometry(
   const pos = attachment.actualPos; // [x, y, z] dynamically attached to wing
 
   // 1. Hollow Nacelle Shell (Outer Cowl, Aerodynamic Intake Lip, Inner Duct Wall & Exhaust Nozzle)
-  const nacelleGeo = generateHollowNacelleGeometry(pos, radius, len, isPropeller);
+  const nacelleGeo = generateHollowNacelleGeometry(pos, radius, len, isPropeller, quality);
   geos.push(nacelleGeo);
 
   // 2. Central Spinner Cone
-  const spinnerGeo = generateCenterSpinnerGeometry(pos, radius, len, isPropeller);
+  const spinnerGeo = generateCenterSpinnerGeometry(pos, radius, len, isPropeller, quality);
   geos.push(spinnerGeo);
 
   // 3. Aft Core Exhaust Plug / Cone (for turbofan, turbojet, and EDF)
   if (!isPropeller) {
-    const aftCoreGeo = generateAftCorePlugGeometry(pos, radius, len);
+    const aftCoreGeo = generateAftCorePlugGeometry(pos, radius, len, quality);
     geos.push(aftCoreGeo);
   }
 
@@ -204,11 +205,22 @@ function generateHollowNacelleGeometry(
   pos: [number, number, number],
   radius: number,
   len: number,
-  isPropeller: boolean
+  isPropeller: boolean,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
 ): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
-  const numRings = 24;
-  const ptsPerRing = 36;
+  let numRings = 24;
+  let ptsPerRing = 36;
+  if (quality === 'low') {
+    numRings = 12;
+    ptsPerRing = 18;
+  } else if (quality === 'high') {
+    numRings = 48;
+    ptsPerRing = 72;
+  } else if (quality === 'ultra') {
+    numRings = 96;
+    ptsPerRing = 144;
+  }
   const wallThick = radius * (isPropeller ? 0.07 : 0.085);
 
   const positions: number[] = [];
@@ -357,11 +369,22 @@ function generateCenterSpinnerGeometry(
   pos: [number, number, number],
   radius: number,
   len: number,
-  isPropeller: boolean
+  isPropeller: boolean,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
 ): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
-  const numRings = 14;
-  const ptsPerRing = 24;
+  let numRings = 14;
+  let ptsPerRing = 24;
+  if (quality === 'low') {
+    numRings = 8;
+    ptsPerRing = 12;
+  } else if (quality === 'high') {
+    numRings = 28;
+    ptsPerRing = 48;
+  } else if (quality === 'ultra') {
+    numRings = 56;
+    ptsPerRing = 96;
+  }
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -436,11 +459,22 @@ function generateCenterSpinnerGeometry(
 function generateAftCorePlugGeometry(
   pos: [number, number, number],
   radius: number,
-  len: number
+  len: number,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
 ): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
-  const numRings = 12;
-  const ptsPerRing = 24;
+  let numRings = 12;
+  let ptsPerRing = 24;
+  if (quality === 'low') {
+    numRings = 6;
+    ptsPerRing = 12;
+  } else if (quality === 'high') {
+    numRings = 24;
+    ptsPerRing = 48;
+  } else if (quality === 'ultra') {
+    numRings = 48;
+    ptsPerRing = 96;
+  }
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];

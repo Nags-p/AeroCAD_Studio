@@ -130,7 +130,7 @@ export function Dashboard() {
       <header className="h-16 border-b border-slate-200 px-8 flex items-center justify-between bg-white/80 backdrop-blur-md relative z-10 shadow-sm">
         <div className="flex items-center gap-2 bg-sky-600 px-3 py-1.5 rounded-lg text-white font-bold text-base shadow">
           <Plane className="w-5 h-5 text-white stroke-[2.5]" />
-          <span>AeroCAD Studio</span>
+          <span>TurboDESiM Aero</span>
           <span className="text-[10px] uppercase font-mono px-1 py-0.2 bg-white/20 rounded text-white">PRO</span>
         </div>
 
@@ -211,7 +211,7 @@ export function Dashboard() {
               <span className="text-xs font-semibold text-slate-700">Choose Starting Template</span>
               <div className="grid grid-cols-1 gap-2.5">
                 {[
-                  { id: 'blank', label: 'Blank Canvas', desc: 'Empty workspace with basic fuselage only', icon: FileCode, accent: 'text-slate-500' },
+                  { id: 'blank', label: 'Blank Canvas', desc: 'Completely empty workspace with no initial components', icon: FileCode, accent: 'text-slate-500' },
                   { id: 'high_wing_cargo', label: 'Tactical Cargo (High Wing)', desc: 'High-mount shoulder wings, T-tail & twin turboprops', icon: Plane, accent: 'text-amber-500' },
                   { id: 'commercial', label: 'Commercial Airliner (Low Wing)', desc: 'Low-mount swept wings, conventional tail & twin turbofans', icon: Plane, accent: 'text-emerald-500' },
                   { id: 'delta_strike', label: 'Delta Strike Fighter (Mid Wing)', desc: 'Mid-mount supersonic delta wings & single jet engine', icon: Plane, accent: 'text-sky-500' },
@@ -406,7 +406,7 @@ export function Dashboard() {
                 </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                AeroCAD Studio supports secure client-side encryption. Connect Google Drive to sync your design files. We encrypt the files locally using **AES-256-GCM** before uploading them, making it impossible for third parties (or Google) to read your designs without your passphrase.
+                TurboDESiM Aero supports secure client-side encryption. Connect Google Drive to sync your design files. We encrypt the files locally using **AES-256-GCM** before uploading them, making it impossible for third parties (or Google) to read your designs without your passphrase.
               </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px] text-slate-500">
                 <span className="flex items-center gap-1">
@@ -449,7 +449,7 @@ export function Dashboard() {
                   ? 'Your encryption passcode is currently saved on this device. You can update your passcode below.'
                   : 'Enter a secret passcode for AES-256 client-side encryption. This passcode is saved locally on your device so logging out and in will automatically remember it.'}
                 <span className="block mt-1 font-semibold text-amber-600">
-                  ⚠️ Google and AeroCAD do not store this passcode. If lost, your cloud files cannot be recovered.
+                  ⚠️ Google and TurboDESiM Aero do not store this passcode. If lost, your cloud files cannot be recovered.
                 </span>
               </p>
             </div>

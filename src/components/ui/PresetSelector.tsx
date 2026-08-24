@@ -4,6 +4,7 @@ import React from 'react';
 import { X, Sparkles, Check } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useAircraftStore } from '@/store/useAircraftStore';
+import { useFileStore } from '@/store/useFileStore';
 import { AircraftThumbnail } from './AircraftThumbnail';
 import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 
@@ -12,17 +13,17 @@ export function PresetSelector() {
   const closeModal = useUIStore((state) => state.closeModal);
 
   const currentModelId = useAircraftStore((state) => state.model.id);
-  const loadPreset = useAircraftStore((state) => state.loadPreset);
+  const createNewFile = useFileStore((state) => state.createNewFile);
 
   if (activeModal !== 'presets') return null;
 
   const presetsList = [
-    { key: 'high_wing_cargo', title: 'Tactical Cargo Airlifter (High Wing)', subtitle: 'Heavy-lift transport with shoulder-mounted high wing, twin turboprops & T-tail' },
-    { key: 'commercial', title: 'Commercial Airliner (Low Wing)', subtitle: 'High-efficiency transport airliner with low-mounted swept wings & turbofans' },
-    { key: 'delta_strike', title: 'Delta Strike Fighter (Mid Wing)', subtitle: 'Mid-wing stealth strike configuration with blended winglets & jet engine' },
-    { key: 'fighter', title: 'Supersonic Fighter (Mid Wing)', subtitle: 'Twin afterburning jet fighter with canted vertical tails & cropped delta wings' },
-    { key: 'glider', title: 'High-Performance Glider (High Wing)', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets' },
-    { key: 'drone', title: 'Recon Drone UAV (High Wing)', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail' },
+    { key: 'high_wing_cargo', title: 'Tactical Cargo Airlifter (High Wing)', subtitle: 'Heavy-lift transport with shoulder-mounted high wing, twin turboprops & T-tail', defaultName: 'Tactical Cargo' },
+    { key: 'commercial', title: 'Commercial Airliner (Low Wing)', subtitle: 'High-efficiency transport airliner with low-mounted swept wings & turbofans', defaultName: 'Commercial Airliner' },
+    { key: 'delta_strike', title: 'Delta Strike Fighter (Mid Wing)', subtitle: 'Mid-wing stealth strike configuration with blended winglets & jet engine', defaultName: 'Delta Strike Fighter' },
+    { key: 'fighter', title: 'Supersonic Fighter (Mid Wing)', subtitle: 'Twin afterburning jet fighter with canted vertical tails & cropped delta wings', defaultName: 'Supersonic Fighter' },
+    { key: 'glider', title: 'High-Performance Glider (High Wing)', subtitle: 'Ultra high aspect-ratio sailplane with C1/C2 blended winglets', defaultName: 'High-Performance Glider' },
+    { key: 'drone', title: 'Recon Drone UAV (High Wing)', subtitle: 'Long-endurance tactical drone with pusher prop & inverted V-tail', defaultName: 'Recon Drone UAV' },
   ];
 
   return (
@@ -39,14 +40,14 @@ export function PresetSelector() {
         </div>
 
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[75vh] overflow-y-auto">
-          {presetsList.map(({ key, title, subtitle }) => {
+          {presetsList.map(({ key, title, subtitle, defaultName }) => {
             const isSelected = currentModelId.includes(key);
             const presetModel = AIRCRAFT_PRESETS[key];
             return (
               <div
                 key={key}
                 onClick={() => {
-                  loadPreset(key);
+                  createNewFile(defaultName, key);
                   closeModal();
                 }}
                 className={`p-4 rounded-xl border transition-all cursor-pointer flex gap-3 relative overflow-hidden group ${

@@ -117,6 +117,66 @@ export function MeasurementsPanel() {
                     [{(aero.centerOfGravity[0] * lenMult).toFixed(2)}, {(aero.centerOfGravity[1] * lenMult).toFixed(2)}, {(aero.centerOfGravity[2] * lenMult).toFixed(2)}] {lenUnit}
                   </td>
                 </tr>
+                {aero.cL !== undefined && aero.cD !== undefined && aero.loD !== undefined && (
+                  <>
+                    <tr>
+                      <td className="py-2 text-slate-600">Lift Coefficient (Estimated @ α=4.5°)</td>
+                      <td className="py-2 font-bold text-sky-600">C_L</td>
+                      <td className="py-2 font-bold">{aero.cL.toFixed(3)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 text-slate-600">Drag Coefficient (Estimated @ α=4.5°)</td>
+                      <td className="py-2 font-bold text-rose-600">C_D</td>
+                      <td className="py-2 font-bold">{aero.cD.toFixed(4)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 text-slate-600">Lift-to-Drag Ratio (Aerodynamic Efficiency)</td>
+                      <td className="py-2 font-bold text-emerald-600">L/D</td>
+                      <td className="py-2 font-bold">{aero.loD.toFixed(1)}</td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Component Mass & Materials Breakdown Table */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-purple-700 flex items-center gap-2">
+              <Scale className="w-4 h-4 text-purple-600" /> Component Mass & Materials Breakdown
+            </h4>
+
+            <table className="w-full text-xs text-left font-mono border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="py-2">Component</th>
+                  <th className="py-2">Type</th>
+                  <th className="py-2">Assigned Material</th>
+                  <th className="py-2">Apparent Density</th>
+                  <th className="py-2">Volume</th>
+                  <th className="py-2 text-right">Mass</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-slate-900">
+                {aero.componentMasses?.map((comp) => (
+                  <tr key={comp.id} className="hover:bg-slate-100/50">
+                    <td className="py-2 font-bold text-slate-700">{comp.name}</td>
+                    <td className="py-2 text-slate-500">{comp.type}</td>
+                    <td className="py-2 font-semibold text-sky-700">{comp.materialName}</td>
+                    <td className="py-2 text-slate-600">{Math.round(comp.density * (units === 'imperial' ? 0.06242796 : 1.0))} {units === 'imperial' ? 'lbs/ft³' : 'kg/m³'}</td>
+                    <td className="py-2 text-slate-600">{(comp.volume * volMult).toFixed(2)} {volUnit}</td>
+                    <td className="py-2 font-bold text-right text-purple-600">
+                      {Math.round(comp.mass * wtMult)} {wtUnit}
+                    </td>
+                  </tr>
+                ))}
+                {(!aero.componentMasses || aero.componentMasses.length === 0) && (
+                  <tr>
+                    <td colSpan={6} className="py-4 text-center text-slate-400">
+                      No active aircraft components to analyze.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

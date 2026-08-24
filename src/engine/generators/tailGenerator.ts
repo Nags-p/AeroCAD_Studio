@@ -1,12 +1,15 @@
 import * as THREE from 'three';
-import { TailComponent, WingComponent } from '@/types/aircraft';
+import { TailComponent, WingComponent } from '../../types/aircraft';
 import { generateWingGeometry } from './wingGenerator';
 
 /**
  * Builds standard 3D BufferGeometry for Tail configurations (Conventional, V-Tail, T-Tail, Twin-Tail, Canard).
  * Now uses independent horizontalSweep / verticalSweep when available, falling back to shared `sweep`.
  */
-export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry {
+export function generateTailGeometry(
+  tail: TailComponent,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
+): THREE.BufferGeometry {
   if (!tail || !tail.visible) return new THREE.BufferGeometry();
 
   const pos = tail.position;
@@ -40,7 +43,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       color: tail.color,
       winglets: noWinglets(),
     };
-    return generateWingGeometry(vWing, false);
+    return generateWingGeometry(vWing, false, quality);
   }
 
   if (tail.type === 't-tail') {
@@ -94,7 +97,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       winglets: noWinglets(),
     };
 
-    return mergeGeometries([generateWingGeometry(vertWing, true), generateWingGeometry(horizWing, false)]);
+    return mergeGeometries([generateWingGeometry(vertWing, true, quality), generateWingGeometry(horizWing, false, quality)]);
   }
 
   if (tail.type === 'twin-tail') {
@@ -149,9 +152,9 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
     const lFin: WingComponent = { ...rFin, id: tail.id + '_lf', rootPos: finLeftPos };
 
     return mergeGeometries([
-      generateWingGeometry(horizWing, false),
-      generateWingGeometry(rFin, true),
-      generateWingGeometry(lFin, true),
+      generateWingGeometry(horizWing, false, quality),
+      generateWingGeometry(rFin, true, quality),
+      generateWingGeometry(lFin, true, quality),
     ]);
   }
 
@@ -182,7 +185,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       color: tail.color,
       winglets: noWinglets(),
     };
-    geos.push(generateWingGeometry(horiz, false));
+    geos.push(generateWingGeometry(horiz, false, quality));
   }
 
   if (hasVert) {
@@ -206,7 +209,7 @@ export function generateTailGeometry(tail: TailComponent): THREE.BufferGeometry 
       color: tail.color,
       winglets: noWinglets(),
     };
-    geos.push(generateWingGeometry(vert, true));
+    geos.push(generateWingGeometry(vert, true, quality));
   }
 
   return mergeGeometries(geos);

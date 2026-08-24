@@ -50,7 +50,7 @@ export function ExportImportModal() {
           loadJSONModel(parsed);
           closeModal();
         } else {
-          alert('Invalid AeroCAD project JSON file structure.');
+          alert('Invalid TurboDESiM Aero project JSON file structure.');
         }
       } catch {
         alert('Error parsing JSON file.');
@@ -65,7 +65,7 @@ export function ExportImportModal() {
         <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <div className="flex items-center gap-2 font-bold text-sky-700">
             {isImport ? <Upload className="w-5 h-5" /> : <Download className="w-5 h-5" />}
-            <span>{isImport ? 'Open / Import AeroCAD Model' : 'Export Aircraft CAD Model'}</span>
+            <span>{isImport ? 'Open / Import TurboDESiM Aero Model' : 'Export Aircraft CAD Model'}</span>
           </div>
           <button onClick={closeModal} className="text-slate-400 hover:text-slate-700">
             <X className="w-5 h-5" />
@@ -77,7 +77,7 @@ export function ExportImportModal() {
             <div className="space-y-4 text-center py-8 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50">
               <Upload className="w-10 h-10 mx-auto text-sky-600" />
               <div className="space-y-1">
-                <h4 className="font-bold text-sm text-slate-900">Select AeroCAD JSON Project File</h4>
+                <h4 className="font-bold text-sm text-slate-900">Select TurboDESiM Aero JSON Project File</h4>
                 <p className="text-xs text-slate-500">
                   Load parametric geometry specs directly into studio memory.
                 </p>
@@ -272,7 +272,7 @@ export function ExportImportModal() {
                       <FileCode className="w-4 h-4 text-amber-600" /> Parametric JSON (.json)
                     </div>
                     <p className="text-slate-500 text-[11px] mt-1">
-                      Lossless raw math specification for re-editing in AeroCAD Studio.
+                      Lossless raw math specification for re-editing in TurboDESiM Aero.
                     </p>
                   </div>
                   <button className="text-amber-700 font-bold text-left group-hover:underline text-xs">

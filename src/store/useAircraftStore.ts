@@ -9,6 +9,7 @@ interface AircraftStoreState {
 
   // History stack for Undo/Redo
   history: AircraftModel[];
+  historyLabels: string[];
   historyIndex: number;
 
   // Actions
@@ -38,6 +39,8 @@ interface AircraftStoreState {
 
   undo: () => void;
   redo: () => void;
+  jumpToHistoryIndex: (index: number) => void;
+  duplicateComponent: (id: string, type: 'wing' | 'tail' | 'engine') => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -66,20 +69,65 @@ function sanitizeModel(model: AircraftModel): AircraftModel {
 const initialModel = sanitizeModel(AIRCRAFT_PRESETS.delta_strike || AIRCRAFT_PRESETS.commercial);
 
 export const useAircraftStore = create<AircraftStoreState>((set, get) => {
-  const pushState = (newModel: AircraftModel) => {
-    const sanitized = sanitizeModel(newModel);
-    const { history, historyIndex } = get();
+  let historyTimeout: NodeJS.Timeout | null = null;
+  let pendingState: AircraftModel | null = null;
+  let pendingLabel = 'Modify Design';
+
+  const commitPendingState = () => {
+    if (historyTimeout) {
+      clearTimeout(historyTimeout);
+      historyTimeout = null;
+    }
+    if (!pendingState) return;
+
+    const sanitized = pendingState;
+    const label = pendingLabel;
+    pendingState = null;
+
+    const { history, historyLabels, historyIndex } = get();
     const newHistory = history.slice(0, historyIndex + 1);
+    const newLabels = historyLabels.slice(0, historyIndex + 1);
     newHistory.push(JSON.parse(JSON.stringify(sanitized)));
-    if (newHistory.length > 50) newHistory.shift();
+    newLabels.push(label);
+    
+    if (newHistory.length > 50) {
+      newHistory.shift();
+      newLabels.shift();
+    }
 
     set({
-      model: sanitized,
       history: newHistory,
+      historyLabels: newLabels,
       historyIndex: newHistory.length - 1,
       canUndo: newHistory.length > 1,
       canRedo: false,
     });
+  };
+
+  const pushState = (newModel: AircraftModel, label = 'Modify Design', debounce = false) => {
+    const sanitized = sanitizeModel(newModel);
+
+    // Update active model immediately for real-time response
+    set({
+      model: sanitized,
+      canUndo: true,
+      canRedo: false,
+    });
+
+    pendingState = sanitized;
+    pendingLabel = label;
+
+    if (historyTimeout) {
+      clearTimeout(historyTimeout);
+    }
+
+    if (debounce) {
+      historyTimeout = setTimeout(() => {
+        commitPendingState();
+      }, 500);
+    } else {
+      commitPendingState();
+    }
   };
 
   return {
@@ -87,6 +135,7 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     selectedId: 'sec-1',
     selectedType: 'section',
     history: [sanitizeModel(initialModel)],
+    historyLabels: ['Initial Design Load'],
     historyIndex: 0,
     canUndo: false,
     canRedo: false,
@@ -99,22 +148,37 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         ...model,
         fuselage: { ...model.fuselage, ...params },
       };
-      pushState(newModel);
+      let label = 'Update Fuselage';
+      if (params.length !== undefined) label = `Change Fuselage Length (${params.length}m)`;
+      else if (params.radius !== undefined) label = `Change Fuselage Radius (${params.radius}m)`;
+      else if (params.color !== undefined) label = 'Change Fuselage Color';
+      else if (params.material !== undefined) label = 'Change Fuselage Material';
+      else if (params.noseRoundness !== undefined) label = 'Change Nose Roundness';
+      else if (params.noseZ !== undefined || params.noseY !== undefined) label = 'Shift Nose Position';
+      else if (params.tailZ !== undefined || params.tailY !== undefined) label = 'Shift Tail Position';
+      else if (params.visible !== undefined) label = params.visible ? 'Show Fuselage' : 'Hide Fuselage';
+      
+      pushState(newModel, label, true);
     },
 
     updateFuselageSection: (sectionId, params) => {
       const model = get().model;
-      // Strict single-section update by exact sectionId
       const sections = model.fuselage.sections.map((sec) =>
         sec.id === sectionId ? { ...sec, ...params } : sec
       );
+      const targetSec = model.fuselage.sections.find((sec) => sec.id === sectionId);
+      const name = targetSec ? targetSec.name : 'Section';
+
+      let label = `Update ${name}`;
+      if (params.width !== undefined || params.height !== undefined) label = `Resize ${name}`;
+      else if (params.shapeType !== undefined) label = `Change ${name} Shape`;
 
       const newFuselage = {
         ...model.fuselage,
         sections,
       };
 
-      pushState({ ...model, fuselage: newFuselage });
+      pushState({ ...model, fuselage: newFuselage }, label, true);
     },
 
     addFuselageSection: () => {
@@ -132,19 +196,26 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         zOffset: 0,
       };
       const sections = [...model.fuselage.sections, newSec];
-      pushState({ ...model, fuselage: { ...model.fuselage, sections } });
+      pushState({ ...model, fuselage: { ...model.fuselage, sections } }, `Add Fuselage Section ${count + 1}`);
     },
 
     deleteFuselageSection: (sectionId) => {
       const model = get().model;
-      if (model.fuselage.sections.length <= 2) return;
+      if (model.fuselage.sections.length <= 1) return;
+      const targetSec = model.fuselage.sections.find((sec) => sec.id === sectionId);
+      const name = targetSec ? targetSec.name : 'Section';
       const sections = model.fuselage.sections.filter((sec) => sec.id !== sectionId);
-      pushState({ ...model, fuselage: { ...model.fuselage, sections } });
+      const { selectedId } = get();
+      pushState({ ...model, fuselage: { ...model.fuselage, sections } }, `Delete ${name}`);
+      if (selectedId === sectionId) {
+        set({ selectedId: sections[0]?.id || null, selectedType: sections[0] ? 'section' : null });
+      }
     },
 
     updateWing: (wingId, params) => {
       const model = get().model;
       const oldWing = model.wings.find((w) => w.id === wingId);
+      const name = oldWing ? oldWing.name : 'Wing';
       const wings = model.wings.map((w) => (w.id === wingId ? { ...w, ...params } : w));
 
       let engines = model.engines;
@@ -165,7 +236,15 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         }
       }
 
-      pushState({ ...model, wings, engines });
+      let label = `Update ${name}`;
+      if (params.span !== undefined) label = `Change ${name} Span (${params.span}m)`;
+      else if (params.sweep !== undefined) label = `Change ${name} Sweep (${params.sweep}°)`;
+      else if (params.dihedral !== undefined) label = `Change ${name} Dihedral (${params.dihedral}°)`;
+      else if (params.rootChord !== undefined || params.tipChord !== undefined) label = `Resize ${name} Chords`;
+      else if (params.color !== undefined) label = `Change ${name} Color`;
+      else if (params.material !== undefined) label = `Change ${name} Material`;
+
+      pushState({ ...model, wings, engines }, label, true);
     },
 
     addWing: (config = 'mid') => {
@@ -185,9 +264,10 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         label = 'Low';
       }
 
+      const wingName = `${label} Wing ${model.wings.length + 1}`;
       const newWing: WingComponent = {
         id: `wing-${Date.now()}`,
-        name: `${label} Wing ${model.wings.length + 1}`,
+        name: wingName,
         visible: true,
         locked: false,
         mountConfig: config,
@@ -202,32 +282,50 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         rootCamber: 1,
         tipCamber: 0,
         airfoilName: 'NACA 0012',
-        rootPos: [0, 0, zPos],
+        rootPos: [model.fuselage.length * 0.35, 0, zPos],
         color: '#0284C7',
         winglets: { enabled: false, height: 1.0, root: 0.8, tip: 0.3, sweep: 30.0, cant: 15.0, filletRadius: 0.5 },
       };
       const wings = [...model.wings, newWing];
-      pushState({ ...model, wings });
+      pushState({ ...model, wings }, `Add ${wingName}`);
     },
 
     deleteWing: (wingId) => {
       const model = get().model;
-      if (model.wings.length <= 1) return;
+      const oldWing = model.wings.find((w) => w.id === wingId);
+      const name = oldWing ? oldWing.name : 'Wing';
       const wings = model.wings.filter((w) => w.id !== wingId);
-      pushState({ ...model, wings });
+      const { selectedId } = get();
+      // Also detach engines referencing this wing
+      const engines = model.engines.map((eng) =>
+        eng.parentWingId === wingId ? { ...eng, parentWingId: wings[0]?.id } : eng
+      );
+      pushState({ ...model, wings, engines }, `Delete ${name}`);
+      if (selectedId === wingId) {
+        set({ selectedId: null, selectedType: null });
+      }
     },
 
     updateTail: (tailId, params) => {
       const model = get().model;
+      const oldTail = model.tails.find((t) => t.id === tailId);
+      const name = oldTail ? oldTail.name : 'Tail';
       const tails = model.tails.map((t) => (t.id === tailId ? { ...t, ...params } : t));
-      pushState({ ...model, tails });
+      
+      let label = `Update ${name}`;
+      if (params.type !== undefined) label = `Change ${name} Configuration (${params.type})`;
+      else if (params.color !== undefined) label = `Change ${name} Color`;
+      else if (params.material !== undefined) label = `Change ${name} Material`;
+
+      pushState({ ...model, tails }, label, true);
     },
 
     addTail: () => {
       const model = get().model;
+      const tailName = `Tail Fin ${model.tails.length + 1}`;
       const newTail: TailComponent = {
         id: `tail-${Date.now()}`,
-        name: `Tail Fin ${model.tails.length + 1}`,
+        name: tailName,
         visible: true,
         locked: false,
         type: 'conventional',
@@ -237,40 +335,56 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         verticalChord: 1.5,
         sweep: 30.0,
         dihedral: 0,
-        position: [4.0, 0, 0],
+        position: [model.fuselage.length * 0.85, 0, model.fuselage.radius * 0.25],
         color: '#0369A1',
       };
       const tails = [...model.tails, newTail];
-      pushState({ ...model, tails });
+      pushState({ ...model, tails }, `Add ${tailName}`);
     },
 
     deleteTail: (tailId) => {
       const model = get().model;
-      if (model.tails.length <= 1) return;
+      const oldTail = model.tails.find((t) => t.id === tailId);
+      const name = oldTail ? oldTail.name : 'Tail';
       const tails = model.tails.filter((t) => t.id !== tailId);
-      pushState({ ...model, tails });
+      const { selectedId } = get();
+      pushState({ ...model, tails }, `Delete ${name}`);
+      if (selectedId === tailId) {
+        set({ selectedId: null, selectedType: null });
+      }
     },
 
     updateEngine: (engineId, params) => {
       const model = get().model;
+      const oldEng = model.engines.find((e) => e.id === engineId);
+      const name = oldEng ? oldEng.name : 'Engine';
       const engines = model.engines.map((e) => (e.id === engineId ? { ...e, ...params } : e));
-      pushState({ ...model, engines });
+      
+      let label = `Update ${name}`;
+      if (params.type !== undefined) label = `Change ${name} Type (${params.type})`;
+      else if (params.diameter !== undefined) label = `Change ${name} Diameter (${params.diameter}m)`;
+      else if (params.length !== undefined) label = `Change ${name} Length (${params.length}m)`;
+      else if (params.color !== undefined) label = `Change ${name} Color`;
+      else if (params.material !== undefined) label = `Change ${name} Material`;
+
+      pushState({ ...model, engines }, label, true);
     },
 
     addEngine: () => {
       const model = get().model;
       const wing = model.wings[0];
       const spanY = wing ? wing.rootPos[1] + (wing.span / 2) * 0.35 : 3.0;
-      const rootX = wing ? wing.rootPos[0] + wing.rootChord * 0.4 : 1.0;
+      const rootX = wing ? wing.rootPos[0] + wing.rootChord * 0.45 : model.fuselage.length * 0.4;
+      const engName = `Engine Nacelle ${model.engines.length + 1}`;
       const newEngine: EngineComponent = {
         id: `eng-${Date.now()}`,
-        name: `Engine Nacelle ${model.engines.length + 1}`,
+        name: engName,
         visible: true,
         locked: false,
         type: 'turbofan',
         diameter: 1.4,
         length: 3.0,
-        position: [rootX, spanY, -0.8],
+        position: [rootX, spanY, wing ? wing.rootPos[2] - 0.8 : -0.8],
         pylonHeight: 0.45,
         pylonWidth: 0.2,
         fanBlades: 16,
@@ -280,56 +394,102 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
         color: '#475569',
       };
       const engines = [...model.engines, newEngine];
-      pushState({ ...model, engines });
+      pushState({ ...model, engines }, `Add ${engName}`);
     },
 
     deleteEngine: (engineId) => {
       const model = get().model;
-      if (model.engines.length <= 1) return;
+      const oldEng = model.engines.find((e) => e.id === engineId);
+      const name = oldEng ? oldEng.name : 'Engine';
       const engines = model.engines.filter((e) => e.id !== engineId);
-      pushState({ ...model, engines });
+      const { selectedId } = get();
+      pushState({ ...model, engines }, `Delete ${name}`);
+      if (selectedId === engineId) {
+        set({ selectedId: null, selectedType: null });
+      }
     },
 
     toggleComponentVisibility: (id) => {
       const model = get().model;
       const newModel: AircraftModel = { ...model };
+      let name = 'Component';
 
       if (newModel.fuselage.id === id) {
         newModel.fuselage.visible = !newModel.fuselage.visible;
+        name = newModel.fuselage.name;
       }
-      newModel.wings = newModel.wings.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w));
-      newModel.tails = newModel.tails.map((t) => (t.id === id ? { ...t, visible: !t.visible } : t));
-      newModel.engines = newModel.engines.map((e) => (e.id === id ? { ...e, visible: !e.visible } : e));
+      newModel.wings = newModel.wings.map((w) => {
+        if (w.id === id) {
+          name = w.name;
+          return { ...w, visible: !w.visible };
+        }
+        return w;
+      });
+      newModel.tails = newModel.tails.map((t) => {
+        if (t.id === id) {
+          name = t.name;
+          return { ...t, visible: !t.visible };
+        }
+        return t;
+      });
+      newModel.engines = newModel.engines.map((e) => {
+        if (e.id === id) {
+          name = e.name;
+          return { ...e, visible: !e.visible };
+        }
+        return e;
+      });
 
-      pushState(newModel);
+      pushState(newModel, `Toggle Visibility (${name})`);
     },
 
     toggleComponentLock: (id) => {
       const model = get().model;
       const newModel: AircraftModel = { ...model };
+      let name = 'Component';
 
       if (newModel.fuselage.id === id) {
         newModel.fuselage.locked = !newModel.fuselage.locked;
+        name = newModel.fuselage.name;
       }
-      newModel.wings = newModel.wings.map((w) => (w.id === id ? { ...w, locked: !w.locked } : w));
-      newModel.tails = newModel.tails.map((t) => (t.id === id ? { ...t, locked: !t.locked } : t));
-      newModel.engines = newModel.engines.map((e) => (e.id === id ? { ...e, locked: !e.locked } : e));
+      newModel.wings = newModel.wings.map((w) => {
+        if (w.id === id) {
+          name = w.name;
+          return { ...w, locked: !w.locked };
+        }
+        return w;
+      });
+      newModel.tails = newModel.tails.map((t) => {
+        if (t.id === id) {
+          name = t.name;
+          return { ...t, locked: !t.locked };
+        }
+        return t;
+      });
+      newModel.engines = newModel.engines.map((e) => {
+        if (e.id === id) {
+          name = e.name;
+          return { ...e, locked: !e.locked };
+        }
+        return e;
+      });
 
-      pushState(newModel);
+      pushState(newModel, `Toggle Lock (${name})`);
     },
 
     loadPreset: (presetKey) => {
       const preset = AIRCRAFT_PRESETS[presetKey];
       if (preset) {
-        pushState(sanitizeModel(JSON.parse(JSON.stringify(preset))));
+        pushState(sanitizeModel(JSON.parse(JSON.stringify(preset))), `Load Preset (${preset.name})`);
       }
     },
 
     loadJSONModel: (jsonModel) => {
-      pushState(sanitizeModel(JSON.parse(JSON.stringify(jsonModel))));
+      pushState(sanitizeModel(JSON.parse(JSON.stringify(jsonModel))), `Import Design (${jsonModel.name || 'Untitled'})`);
     },
 
     undo: () => {
+      commitPendingState();
       const { history, historyIndex } = get();
       if (historyIndex > 0) {
         const newIndex = historyIndex - 1;
@@ -343,6 +503,7 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     },
 
     redo: () => {
+      commitPendingState();
       const { history, historyIndex } = get();
       if (historyIndex < history.length - 1) {
         const newIndex = historyIndex + 1;
@@ -352,6 +513,61 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
           canUndo: true,
           canRedo: newIndex < history.length - 1,
         });
+      }
+    },
+
+    jumpToHistoryIndex: (index) => {
+      commitPendingState();
+      const { history } = get();
+      if (index >= 0 && index < history.length) {
+        set({
+          model: JSON.parse(JSON.stringify(history[index])),
+          historyIndex: index,
+          canUndo: index > 0,
+          canRedo: index < history.length - 1,
+        });
+      }
+    },
+
+    duplicateComponent: (id, type) => {
+      const model = get().model;
+      const newModel = { ...model };
+      if (type === 'wing') {
+        const wing = model.wings.find((w) => w.id === id);
+        if (wing) {
+          const newWing = {
+            ...JSON.parse(JSON.stringify(wing)),
+            id: `wing-${Date.now()}`,
+            name: `${wing.name} (Copy)`,
+            rootPos: [wing.rootPos[0], wing.rootPos[1], wing.rootPos[2] + 0.5],
+          };
+          newModel.wings = [...model.wings, newWing];
+          pushState(newModel, `Duplicate ${wing.name}`);
+        }
+      } else if (type === 'tail') {
+        const tail = model.tails.find((t) => t.id === id);
+        if (tail) {
+          const newTail = {
+            ...JSON.parse(JSON.stringify(tail)),
+            id: `tail-${Date.now()}`,
+            name: `${tail.name} (Copy)`,
+            position: [tail.position[0], tail.position[1], tail.position[2] + 0.5],
+          };
+          newModel.tails = [...model.tails, newTail];
+          pushState(newModel, `Duplicate ${tail.name}`);
+        }
+      } else if (type === 'engine') {
+        const eng = model.engines.find((e) => e.id === id);
+        if (eng) {
+          const newEng = {
+            ...JSON.parse(JSON.stringify(eng)),
+            id: `eng-${Date.now()}`,
+            name: `${eng.name} (Copy)`,
+            position: [eng.position[0], eng.position[1] + 1.0, eng.position[2]],
+          };
+          newModel.engines = [...model.engines, newEng];
+          pushState(newModel, `Duplicate ${eng.name}`);
+        }
       }
     },
   };

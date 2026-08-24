@@ -1,15 +1,31 @@
 import * as THREE from 'three';
-import { WingComponent, WingletConfig } from '@/types/aircraft';
+import { WingComponent, WingletConfig } from '../../types/aircraft';
 import { generateNACA4Digit } from '../math/naca';
 
 /**
  * OpenVSP Refined Wing & 100% C1/C2 Tangent Smooth Fillet Arc Winglet Builder.
  */
-export function generateWingGeometry(w: WingComponent, isVertical: boolean = false): THREE.BufferGeometry {
-  const spanSections = 32;
+export function generateWingGeometry(
+  w: WingComponent,
+  isVertical: boolean = false,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
+): THREE.BufferGeometry {
+  let spanSections = 32;
+  let chordSamples = 32;
+
+  if (quality === 'low') {
+    spanSections = 16;
+    chordSamples = 16;
+  } else if (quality === 'high') {
+    spanSections = 64;
+    chordSamples = 64;
+  } else if (quality === 'ultra') {
+    spanSections = 128;
+    chordSamples = 128;
+  }
+
   const wl = w.winglets;
-  const wingletSections = wl && wl.enabled && !isVertical ? 32 : 0;
-  const chordSamples = 32;
+  const wingletSections = wl && wl.enabled && !isVertical ? spanSections : 0;
 
   const airfoil = generateNACA4Digit(w.airfoilName || 'NACA 2412', chordSamples);
 
@@ -41,12 +57,19 @@ export function generateWingGeometry(w: WingComponent, isVertical: boolean = fal
         y = 0;
       }
 
+      const nY = -Math.sin(dihedralRad) * sideMultiplier;
+      const nZ = Math.cos(dihedralRad);
+
       for (let c = 0; c <= chordSamples; c++) {
         const pt = airfoil.upper[c];
         if (isVertical) {
           vertices.push(w.rootPos[0] + xOffset + pt.x * chord, w.rootPos[2] + z, w.rootPos[1] + pt.y * chord);
         } else {
-          vertices.push(w.rootPos[0] + xOffset + pt.x * chord, w.rootPos[2] + z + pt.y * chord, w.rootPos[1] + y);
+          vertices.push(
+            w.rootPos[0] + xOffset + pt.x * chord,
+            w.rootPos[2] + z + pt.y * chord * nZ,
+            w.rootPos[1] + y + pt.y * chord * nY
+          );
         }
         uvs.push(spanT, c / chordSamples);
       }
@@ -56,7 +79,11 @@ export function generateWingGeometry(w: WingComponent, isVertical: boolean = fal
         if (isVertical) {
           vertices.push(w.rootPos[0] + xOffset + pt.x * chord, w.rootPos[2] + z, w.rootPos[1] + pt.y * chord);
         } else {
-          vertices.push(w.rootPos[0] + xOffset + pt.x * chord, w.rootPos[2] + z + pt.y * chord, w.rootPos[1] + y);
+          vertices.push(
+            w.rootPos[0] + xOffset + pt.x * chord,
+            w.rootPos[2] + z + pt.y * chord * nZ,
+            w.rootPos[1] + y + pt.y * chord * nY
+          );
         }
         uvs.push(spanT, c / chordSamples);
       }

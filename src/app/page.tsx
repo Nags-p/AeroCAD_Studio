@@ -13,26 +13,61 @@ import { PresetSelector } from '@/components/ui/PresetSelector';
 import { MeasurementsPanel } from '@/components/ui/MeasurementsPanel';
 import { ExportImportModal } from '@/components/ui/ExportImportModal';
 import { Dashboard } from '@/components/ui/Dashboard';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import { useUIStore } from '@/store/useUIStore';
 import { useFileStore } from '@/store/useFileStore';
+import { useAircraftStore } from '@/store/useAircraftStore';
 
 // Dynamically import Three.js Viewport to avoid SSR window issues
 const Viewport = dynamic(() => import('@/components/cad/Viewport').then((mod) => mod.Viewport), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full bg-cad-bg flex items-center justify-center text-cad-accent font-mono text-sm">
-      Loading AeroCAD 3D Engine...
+      Loading TurboDESiM Aero 3D Engine...
     </div>
   ),
 });
 
-export default function AeroCADStudio() {
+export default function TurboDESiMAero() {
   const currentView = useUIStore((state) => state.currentView);
   const loadFiles = useFileStore((state) => state.loadFiles);
+  const undo = useAircraftStore((state) => state.undo);
+  const redo = useAircraftStore((state) => state.redo);
 
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      // Skip if user is actively typing in a text field
+      if (
+        target &&
+        (target.tagName === 'TEXTAREA' ||
+          (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        if (e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          undo();
+        } else if (e.key.toLowerCase() === 'y') {
+          e.preventDefault();
+          redo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   if (currentView === 'dashboard') {
     return <Dashboard />;
@@ -67,6 +102,7 @@ export default function AeroCADStudio() {
       <PresetSelector />
       <MeasurementsPanel />
       <ExportImportModal />
+      <ContextMenu />
     </main>
   );
 }

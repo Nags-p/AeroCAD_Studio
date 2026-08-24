@@ -50,6 +50,7 @@ export interface FuselageComponent {
   sec3_h: number;
   sec3_x: number;
   color: string;
+  material?: string;
   sections: FuselageSection[];
 }
 
@@ -84,6 +85,7 @@ export interface WingComponent {
   airfoilName: string;  // NACA airfoil profile key
   rootPos: [number, number, number]; // Root attachment position [x, y, z]
   color: string;
+  material?: string;
   winglets: WingletConfig;
 }
 
@@ -105,6 +107,7 @@ export interface TailComponent {
   dihedral: number;
   position: [number, number, number];
   color: string;
+  material?: string;
 }
 
 export interface EngineComponent {
@@ -120,6 +123,7 @@ export interface EngineComponent {
   pylonWidth: number;
   fanBlades: number;
   color: string;
+  material?: string;
   attachToWing?: boolean;      // Automatically attach and conform to parent wing surface
   parentWingId?: string;      // Wing ID to attach to (defaults to first wing)
   spanFraction?: number;      // Spanwise station along wing (0 to 1)
@@ -151,6 +155,16 @@ export interface AirfoilData {
   maxCamber: number;
 }
 
+export interface ComponentMassBreakdown {
+  id: string;
+  name: string;
+  type: string;
+  materialName: string;
+  density: number;
+  volume: number;
+  mass: number;
+}
+
 export interface AeroMetrics {
   totalVolume: number;
   wettedArea: number;
@@ -160,5 +174,9 @@ export interface AeroMetrics {
   taperRatio: number;
   estimatedEmptyWeight: number;
   centerOfGravity: [number, number, number];
+  componentMasses?: ComponentMassBreakdown[];
+  cL?: number;
+  cD?: number;
+  loD?: number;
 }
 

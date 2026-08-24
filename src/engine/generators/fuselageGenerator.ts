@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { FuselageComponent, FuselageSection, SectionShapeType } from '@/types/aircraft';
-import { generateSectionPoints } from '@/engine/math/superellipse';
+import { FuselageComponent, FuselageSection, SectionShapeType } from '../../types/aircraft';
+import { generateSectionPoints } from '../math/superellipse';
 
 export interface ResolvedStation {
   id: string;
@@ -40,11 +40,24 @@ export function resolveStationPositions(sections: FuselageSection[]): ResolvedSt
  * - Continuous Nose Roundness S (0.05 to 3.0) with guaranteed infinite tangent dome for S > 1.0
  * - Spatial point shifting (noseZ, noseY, tailZ, tailY)
  */
-export function generateFuselageGeometry(f: FuselageComponent): THREE.BufferGeometry {
+export function generateFuselageGeometry(
+  f: FuselageComponent,
+  quality: 'low' | 'medium' | 'high' | 'ultra' = 'medium'
+): THREE.BufferGeometry {
   if (!f) return new THREE.BufferGeometry();
 
-  const radialSegments = 64;
-  const axialSegments = 64;
+  let radialSegments = 64;
+  let axialSegments = 64;
+  if (quality === 'low') {
+    radialSegments = 24;
+    axialSegments = 24;
+  } else if (quality === 'high') {
+    radialSegments = 128;
+    axialSegments = 128;
+  } else if (quality === 'ultra') {
+    radialSegments = 256;
+    axialSegments = 256;
+  }
   const len = f.length;
 
   const noseZ = f.noseZ || 0.0;
@@ -91,7 +104,7 @@ export function generateFuselageGeometry(f: FuselageComponent): THREE.BufferGeom
 
   for (let k = 0; k <= K; k++) {
     const t = k / K;
-    const x = t * len - len / 2;
+    const x = t * len;
 
     let rx = 0;
     let ry = 0;

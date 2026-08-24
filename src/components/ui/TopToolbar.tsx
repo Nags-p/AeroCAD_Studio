@@ -14,7 +14,11 @@ import {
   Library,
   ChevronDown,
   Home,
-  Check
+  Check,
+  FilePlus,
+  Copy,
+  LogOut,
+  Wind
 } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -35,10 +39,26 @@ export function TopToolbar() {
   const setUnits = useUIStore((state) => state.setUnits);
   const openModal = useUIStore((state) => state.openModal);
   const setView = useUIStore((state) => state.setView);
+  const tessellationQuality = useUIStore((state) => state.tessellationQuality);
+  const setTessellationQuality = useUIStore((state) => state.setTessellationQuality);
+  const analysisMode = useUIStore((state) => state.analysisMode);
+  const setAnalysisMode = useUIStore((state) => state.setAnalysisMode);
+
+  const flowSimulationActive = useUIStore((state) => state.flowSimulationActive);
+  const toggleFlowSimulation = useUIStore((state) => state.toggleFlowSimulation);
+  const flowColormapMode = useUIStore((state) => state.flowColormapMode);
+  const setFlowColormapMode = useUIStore((state) => state.setFlowColormapMode);
+  const showFlowParticles = useUIStore((state) => state.showFlowParticles);
+  const showFlowStreamlines = useUIStore((state) => state.showFlowStreamlines);
+  const toggleFlowParticles = useUIStore((state) => state.toggleFlowParticles);
+  const toggleFlowStreamlines = useUIStore((state) => state.toggleFlowStreamlines);
+  const flowVelocity = useUIStore((state) => state.flowVelocity);
+  const setFlowVelocity = useUIStore((state) => state.setFlowVelocity);
 
   const activeFileId = useFileStore((state) => state.activeFileId);
   const files = useFileStore((state) => state.files);
   const activeFile = files.find((f) => f.id === activeFileId);
+  const createNewFile = useFileStore((state) => state.createNewFile);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
@@ -60,7 +80,7 @@ export function TopToolbar() {
 
         <div className="flex items-center gap-2 bg-sky-600 px-2.5 py-1 rounded text-white font-bold text-sm shadow">
           <Plane className="w-4 h-4 text-white stroke-[2.5]" />
-          <span>AeroCAD</span>
+          <span>TurboDESiM Aero</span>
         </div>
 
         <span className="text-slate-300">/</span>
@@ -88,7 +108,16 @@ export function TopToolbar() {
               <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
             {activeDropdown === 'file' && (
-              <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                <button
+                  onClick={() => {
+                    createNewFile("Untitled Design", "blank");
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <FilePlus className="w-3.5 h-3.5 text-slate-500" /> New Blank Design
+                </button>
                 <button
                   onClick={() => { openModal('presets'); setActiveDropdown(null); }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
@@ -96,10 +125,31 @@ export function TopToolbar() {
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" /> New from Preset...
                 </button>
                 <button
-                  onClick={() => { openModal('import'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  onClick={() => {
+                    if (activeFile) {
+                      const name = `${activeFile.name} (Copy)`;
+                      const newFile = {
+                        id: `file-${Date.now()}`,
+                        name,
+                        lastModified: new Date().toLocaleString(),
+                        model: JSON.parse(JSON.stringify(model)),
+                      };
+                      const updatedFiles = [newFile, ...files];
+                      useFileStore.setState({ files: updatedFiles, activeFileId: newFile.id });
+                      localStorage.setItem('aerocad_files', JSON.stringify(updatedFiles));
+                      if (useFileStore.getState().driveAccessToken && useFileStore.getState().drivePassphrase) {
+                        useFileStore.getState().uploadFileToDrive(newFile);
+                      }
+                      useAircraftStore.getState().loadJSONModel(newFile.model);
+                    }
+                    setActiveDropdown(null);
+                  }}
+                  disabled={!activeFile}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    activeFile ? 'text-slate-800' : 'text-slate-300 cursor-not-allowed'
+                  }`}
                 >
-                  <Upload className="w-3.5 h-3.5 text-sky-600" /> Open / Import JSON...
+                  <Copy className="w-3.5 h-3.5 text-slate-500" /> Save Design Copy
                 </button>
 
                 <div className="my-1 border-t border-slate-200" />
@@ -109,6 +159,15 @@ export function TopToolbar() {
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-sky-600 font-semibold"
                 >
                   <Download className="w-3.5 h-3.5" /> Export CAD (STEP, IGES, Parasolid, STL, OBJ)...
+                </button>
+
+                <div className="my-1 border-t border-slate-200" />
+
+                <button
+                  onClick={() => { setView('dashboard'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-red-600"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-red-500" /> Exit to Dashboard
                 </button>
               </div>
             )}
@@ -197,6 +256,114 @@ export function TopToolbar() {
                 >
                   <Ruler className="w-3.5 h-3.5 text-amber-600" /> Aerodynamic Mass & CG Analysis
                 </button>
+
+                <div className="my-1 border-t border-slate-200" />
+
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">3D Analysis Views</div>
+                <button
+                  onClick={() => { setAnalysisMode('none'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    analysisMode === 'none' ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" /> CAD Shading (Default)
+                </button>
+                <button
+                  onClick={() => { setAnalysisMode('pressure'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    analysisMode === 'pressure' ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" /> Surface Pressure (Cp)
+                </button>
+                <button
+                  onClick={() => { setAnalysisMode('loading'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    analysisMode === 'loading' ? 'text-emerald-700 font-bold bg-emerald-50' : 'text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Aerodynamic Loading
+                </button>
+                <button
+                  onClick={() => { setAnalysisMode('mass'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    analysisMode === 'mass' ? 'text-amber-700 font-bold bg-amber-50' : 'text-slate-800'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Mass / Density Heatmap
+                </button>
+
+                <div className="my-1 border-t border-slate-200" />
+
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wind Tunnel CFD</div>
+                <button
+                  onClick={() => { toggleFlowSimulation(); setActiveDropdown(null); }}
+                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
+                    flowSimulationActive ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
+                  }`}
+                >
+                  <Wind className="w-3.5 h-3.5 text-sky-500" />
+                  {flowSimulationActive ? '⏹ Stop Wind Tunnel' : '▶ Start Wind Tunnel'}
+                </button>
+
+                {flowSimulationActive && (
+                  <>
+                    <div className="px-3 py-1.5 flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase w-10">Speed:</span>
+                      <input
+                        type="range"
+                        min="20"
+                        max="350"
+                        step="5"
+                        value={flowVelocity}
+                        onChange={(e) => setFlowVelocity(parseInt(e.target.value))}
+                        className="flex-1 accent-sky-600 cursor-pointer h-1"
+                      />
+                      <span className="text-sky-600 font-mono text-[10px] font-extrabold w-[42px] text-right">{flowVelocity}m/s</span>
+                    </div>
+
+                    <div className="px-3 py-1 flex items-center gap-1">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase w-10">Color:</span>
+                      <button
+                        onClick={() => setFlowColormapMode('velocity')}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                          flowColormapMode === 'velocity' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                      >
+                        Velocity
+                      </button>
+                      <button
+                        onClick={() => setFlowColormapMode('pressure')}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
+                          flowColormapMode === 'pressure' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                      >
+                        Pressure
+                      </button>
+                    </div>
+
+                    <div className="px-3 py-1 flex items-center gap-3">
+                      <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 hover:text-slate-900 select-none">
+                        <input
+                          type="checkbox"
+                          checked={showFlowStreamlines}
+                          onChange={toggleFlowStreamlines}
+                          className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-3 h-3 cursor-pointer"
+                        />
+                        Streamlines
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 hover:text-slate-900 select-none">
+                        <input
+                          type="checkbox"
+                          checked={showFlowParticles}
+                          onChange={toggleFlowParticles}
+                          className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-3 h-3 cursor-pointer"
+                        />
+                        Bubbles
+                      </label>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -251,6 +418,7 @@ export function TopToolbar() {
           <Ruler className="w-3.5 h-3.5 text-amber-600" />
           <span>Analysis</span>
         </button>
+
       </div>
 
       {/* Right: Units & Export CTA */}
@@ -271,6 +439,47 @@ export function TopToolbar() {
             }`}
           >
             Imperial (ft)
+          </button>
+        </div>
+
+        {/* Smoothness / Tessellation Toggle */}
+        <div className="flex items-center bg-slate-100 rounded p-0.5 border border-slate-200 text-xs gap-0.5">
+          <span className="text-[10px] text-slate-400 font-bold px-1 select-none">Smoothness:</span>
+          <button
+            onClick={() => setTessellationQuality('low')}
+            className={`px-1.5 py-0.5 rounded transition font-medium ${
+              tessellationQuality === 'low' ? 'bg-sky-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+            title="Coarse (Lowest poly, highest FPS)"
+          >
+            Coarse
+          </button>
+          <button
+            onClick={() => setTessellationQuality('medium')}
+            className={`px-1.5 py-0.5 rounded transition font-medium ${
+              tessellationQuality === 'medium' ? 'bg-sky-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+            title="Medium (Standard quality)"
+          >
+            Med
+          </button>
+          <button
+            onClick={() => setTessellationQuality('high')}
+            className={`px-1.5 py-0.5 rounded transition font-medium ${
+              tessellationQuality === 'high' ? 'bg-sky-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+            title="Fine (High quality, smooth curved edges)"
+          >
+            Fine
+          </button>
+          <button
+            onClick={() => setTessellationQuality('ultra')}
+            className={`px-1.5 py-0.5 rounded transition font-medium ${
+              tessellationQuality === 'ultra' ? 'bg-sky-600 text-white shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+            title="Ultra (Extremely smooth curves, high poly count)"
+          >
+            Ultra
           </button>
         </div>
 

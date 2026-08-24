@@ -5,8 +5,7 @@ import {
   Box,
   Layers,
   Sparkles,
-  Grid,
-  Target
+  Grid
 } from 'lucide-react';
 import { useUIStore, CameraPresetView, VisualShadingMode } from '@/store/useUIStore';
 
@@ -19,12 +18,6 @@ export function ViewportControls() {
 
   const explodedOffset = useUIStore((state) => state.explodedOffset);
   const setExplodedOffset = useUIStore((state) => state.setExplodedOffset);
-
-  const showGrid = useUIStore((state) => state.showGrid);
-  const toggleGrid = useUIStore((state) => state.toggleGrid);
-
-  const showCG = useUIStore((state) => state.showCG);
-  const toggleCG = useUIStore((state) => state.toggleCG);
 
   const views: { id: CameraPresetView; label: string }[] = [
     { id: 'iso', label: 'ISO' },
@@ -79,29 +72,6 @@ export function ViewportControls() {
               {label}
             </button>
           ))}
-        </div>
-
-        {/* Quick Toggles */}
-        <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-          <button
-            onClick={toggleGrid}
-            className={`p-1.5 rounded text-xs transition-colors ${
-              showGrid ? 'text-sky-600 bg-sky-50' : 'text-slate-500 hover:text-slate-900'
-            }`}
-            title="Toggle CAD Floor Grid"
-          >
-            <Grid className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={toggleCG}
-            className={`p-1.5 rounded text-xs transition-colors ${
-              showCG ? 'text-amber-600 bg-amber-50' : 'text-slate-500 hover:text-slate-900'
-            }`}
-            title="Toggle Center of Gravity Indicator"
-          >
-            <Target className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
