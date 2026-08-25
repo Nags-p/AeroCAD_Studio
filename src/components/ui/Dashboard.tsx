@@ -23,8 +23,11 @@ import {
   RotateCcw,
   Pencil,
   HelpCircle,
+  BookOpen,
   Info,
-  ChevronDown
+  ChevronDown,
+  FileText,
+  Scale
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -178,7 +181,7 @@ export function Dashboard() {
                     }}
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
                   >
-                    <HelpCircle className="w-3.5 h-3.5 text-slate-500" /> Help & Documentation
+                    <BookOpen className="w-3.5 h-3.5 text-slate-500" /> Quick Start Docs
                   </button>
                   <button
                     onClick={() => {
@@ -189,6 +192,47 @@ export function Dashboard() {
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
                   >
                     <Key className="w-3.5 h-3.5 text-slate-500" /> Keyboard Shortcuts
+                  </button>
+                  <div className="my-1 border-t border-slate-200" />
+                  <button
+                    onClick={() => {
+                      setHelpTab('disclaimer');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Safety Disclaimer
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHelpTab('eula');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-slate-505" /> License (EULA)
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHelpTab('privacy');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-slate-505" /> Privacy Policy
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHelpTab('terms');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <Scale className="w-3.5 h-3.5 text-slate-505" /> Terms of Service
                   </button>
                 </div>
               </>

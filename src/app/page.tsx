@@ -8,7 +8,6 @@ import { RightProperties } from '@/components/ui/RightProperties';
 import { BottomStatusBar } from '@/components/ui/BottomStatusBar';
 import { ViewportControls } from '@/components/cad/ViewportControls';
 import { SketcherModal } from '@/components/ui/SketcherModal';
-import { AirfoilLibrary } from '@/components/ui/AirfoilLibrary';
 import { PresetSelector } from '@/components/ui/PresetSelector';
 import { MeasurementsPanel } from '@/components/ui/MeasurementsPanel';
 import { ExportImportModal } from '@/components/ui/ExportImportModal';
@@ -34,6 +33,9 @@ const Viewport = dynamic(() => import('@/components/cad/Viewport').then((mod) =>
 
 export default function TurboDESiMAero() {
   const currentView = useUIStore((state) => state.currentView);
+  const openModal = useUIStore((state) => state.openModal);
+  const closeModal = useUIStore((state) => state.closeModal);
+  const setDatabaseTab = useUIStore((state) => state.setDatabaseTab);
   const loadFiles = useFileStore((state) => state.loadFiles);
   const undo = useAircraftStore((state) => state.undo);
   const redo = useAircraftStore((state) => state.redo);
@@ -70,12 +72,19 @@ export default function TurboDESiMAero() {
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         redo();
+      } else if (e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        openModal('database');
+        setDatabaseTab('airfoils');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, openModal, closeModal, setDatabaseTab]);
 
   if (currentView === 'dashboard') {
     return (
@@ -111,7 +120,6 @@ export default function TurboDESiMAero() {
 
       {/* Application Modals */}
       <SketcherModal />
-      <AirfoilLibrary />
       <PresetSelector />
       <MeasurementsPanel />
       <ExportImportModal />

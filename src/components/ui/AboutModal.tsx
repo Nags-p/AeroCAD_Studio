@@ -1,10 +1,99 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, HelpCircle, BookOpen, Key, Info, Zap, Github } from 'lucide-react';
+import { X, HelpCircle, BookOpen, Key, Info, Zap, Github, ShieldAlert, FileText, Lock, Scale } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
+import {
+  ABOUT_CONTENT,
+  DISCLAIMER_CONTENT,
+  EULA_CONTENT,
+  PRIVACY_CONTENT,
+  TERMS_CONTENT,
+  USERGUIDE_CONTENT
+} from './docContent';
 
-type HelpTabType = 'about' | 'docs' | 'keys';
+type HelpTabType = 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
+
+function cleanContent(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/o\^,\?/g, '✈️')
+    .replace(/dY"\?/g, '📐')
+    .replace(/dYO,\?/g, '🌬️')
+    .replace(/dY\?-,\?/g, '🏗️')
+    .replace(/s-,\?/g, '⚖️')
+    .replace(/dY"/g, '📦')
+    .replace(/\+'/g, '➔')
+    .replace(/\?/g, '–')
+    .replace(/\+/g, '➔');
+}
+
+function renderBoldText(text: string) {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return (
+    <>
+      {parts.map((part, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-slate-900">{part}</strong> : part))}
+    </>
+  );
+}
+
+function MarkdownViewer({ content }: { content: string }) {
+  const cleaned = cleanContent(content);
+  const lines = cleaned.split('\n');
+  return (
+    <div className="space-y-3 text-xs leading-relaxed text-slate-700 select-text max-w-none">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (trimmed === '') return <div key={idx} className="h-2" />;
+        
+        if (trimmed.startsWith('# ')) {
+          return <h1 key={idx} className="text-base font-black text-slate-900 border-b border-slate-150 pb-1.5 mt-4 select-none">{trimmed.substring(2)}</h1>;
+        }
+        if (trimmed.startsWith('## ')) {
+          return <h2 key={idx} className="text-[13px] font-extrabold text-slate-950 mt-4 select-none">{trimmed.substring(3)}</h2>;
+        }
+        if (trimmed.startsWith('### ')) {
+          return <h3 key={idx} className="text-xs font-bold text-slate-900 mt-3 select-none">{trimmed.substring(4)}</h3>;
+        }
+        if (trimmed.startsWith('#### ')) {
+          return <h4 key={idx} className="text-[11px] font-bold text-slate-800 mt-2.5 select-none">{trimmed.substring(5)}</h4>;
+        }
+        if (trimmed === '---') {
+          return <hr key={idx} className="my-4 border-t border-slate-200" />;
+        }
+        if (trimmed.startsWith('> ')) {
+          return (
+            <blockquote key={idx} className="border-l-4 border-sky-500 pl-4 py-1.5 bg-slate-50 rounded-r font-medium italic text-slate-650 my-2">
+              {trimmed.substring(2)}
+            </blockquote>
+          );
+        }
+        
+        // List item checking
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-4">
+              <span className="text-slate-400 select-none">•</span>
+              <span className="flex-1">{renderBoldText(trimmed.substring(2))}</span>
+            </div>
+          );
+        }
+        
+        const numListMatch = trimmed.match(/^(\d+)\.\s(.*)$/);
+        if (numListMatch) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-4">
+              <span className="text-sky-600 font-mono font-bold select-none text-[10px]">{numListMatch[1]}.</span>
+              <span className="flex-1">{renderBoldText(numListMatch[2])}</span>
+            </div>
+          );
+        }
+        
+        return <p key={idx}>{renderBoldText(line)}</p>;
+      })}
+    </div>
+  );
+}
 
 export function AboutModal() {
   const activeModal = useUIStore((state) => state.activeModal);
@@ -34,7 +123,7 @@ export function AboutModal() {
         <div className="flex-1 flex overflow-hidden">
           
           {/* Sub-tab selection sidebar */}
-          <div className="w-48 bg-slate-50 border-r border-slate-200 p-3 flex flex-col gap-1.5 select-none">
+          <div className="w-48 bg-slate-50 border-r border-slate-200 p-3 flex flex-col gap-1.5 select-none overflow-y-auto">
             <button
               onClick={() => setActiveTab('about')}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
@@ -70,6 +159,57 @@ export function AboutModal() {
               <Key className="w-4 h-4" />
               <span>Keyboard Keys</span>
             </button>
+
+            <div className="my-1 border-t border-slate-200" />
+            <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold px-3 select-none">Legal & Safety</div>
+
+            <button
+              onClick={() => setActiveTab('disclaimer')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
+                activeTab === 'disclaimer'
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>Disclaimer</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('eula')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
+                activeTab === 'eula'
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>EULA</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('privacy')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
+                activeTab === 'privacy'
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent'
+              }`}
+            >
+              <Lock className="w-4 h-4" />
+              <span>Privacy Policy</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('terms')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
+                activeTab === 'terms'
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent'
+              }`}
+            >
+              <Scale className="w-4 h-4" />
+              <span>Terms of Service</span>
+            </button>
           </div>
 
           {/* Main content display */}
@@ -77,170 +217,12 @@ export function AboutModal() {
             
             {/* TAB 1: ABOUT */}
             {activeTab === 'about' && (
-              <div className="space-y-6 text-slate-700 text-xs leading-relaxed max-w-none">
-                {/* Header branding */}
-                <div className="text-center space-y-1 pb-4 border-b border-slate-100 select-none">
-                  <h2 className="text-xl font-black text-sky-700">TurboDESiM Aero</h2>
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    Parametric Aircraft Design & Engineering Platform
-                  </div>
-                  <div className="text-[10px] font-bold text-slate-400 font-mono">Version 1.0.0</div>
-                </div>
-
-                <div className="space-y-4">
-                  <p>
-                    TurboDESiM Aero is a browser-based parametric aircraft design and engineering platform developed to simplify the early-stage conceptualization, configuration, analysis, and documentation of aircraft.
-                  </p>
-                  <p>
-                    The platform combines <strong className="font-bold">parametric aircraft geometry, 3D visualization, aerodynamic estimation, structural assessment, weight calculations, and CAD-ready geometry generation</strong> into a unified engineering workspace.
-                  </p>
-                  <p>
-                    Instead of building aircraft geometry manually across multiple disconnected tools, TurboDESiM Aero allows engineers to define and modify an aircraft through meaningful aerodynamic and structural parameters while maintaining a consistent digital model.
-                  </p>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">What You Can Do</h3>
-
-                  <div className="space-y-3">
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>✈️</span> Parametric Aircraft Configuration
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Build aircraft configurations using dedicated components for fuselage and cross-section definition, wing geometry and placement, horizontal and vertical tail assemblies, engine nacelles, and propulsion configuration. Changes propagate dynamically through the design model.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>📐</span> 3D Aircraft Visualization
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Visualize the aircraft directly in the browser. The viewport provides multiple visualization modes including solid rendering, wireframe, X-ray, exploded configuration, and standard orthographic (top, front, side) and isometric views.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>🌬️</span> Aerodynamic Analysis
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Evaluate lift and drag coefficients, lift-to-drag ratios, angle-of-attack response, spanwise lift distributions, and drag contributions. Quickly compare configurations before committing to high-fidelity CFD or wind-tunnel testing.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>🏗️</span> Structural Assessment
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Run wing bending assessments, distributed aerodynamic loading calculations, shear force and bending moment estimations, tip deflection sizing, and load response visualization.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>⚖️</span> Weight & Balance
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Estimate components weight, structural and propulsion weight, useful payload, center of gravity (CG) location, and overall weight distribution.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>🧩</span> Parametric Design Workflow
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Perfect for concept generation, configuration studies, design-space exploration, preliminary sizing, and rapid prototyping in an educational or startup setting.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <span>📦</span> CAD & Geometry Export
-                      </h4>
-                      <p className="text-slate-600 mt-1 pl-5">
-                        Export fully parametric aircraft geometry to conventional CAD environments (STEP/IGES) for downstream detailed design and engineering workflows.
-                      </p>
-                    </div>
-                  </div>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">Design Philosophy</h3>
-                  <p className="text-slate-600">
-                    TurboDESiM Aero is built around one principle:
-                  </p>
-                  <blockquote className="border-l-4 border-sky-500 pl-4 py-1 bg-slate-50 rounded-r font-medium text-slate-700 italic">
-                    "Make aircraft design faster, more parametric, and more accessible."
-                  </blockquote>
-                  <p>
-                    Traditional design requires separate specialized tools. TurboDESiM Aero unites these activities in a single browser-based workspace: **Concept → Configuration → Geometry → Analysis → Optimization → CAD**.
-                  </p>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">Engineering Technology</h3>
-                  <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-                    <li><strong className="text-slate-805">3D Geometry Engine:</strong> Interactive WebGL-based Three.js visualization.</li>
-                    <li><strong className="text-slate-805">Aerodynamics:</strong> Discrete Fourier Collocation Lifting-Line methods for rapid design feedback.</li>
-                    <li><strong className="text-slate-805">Structural Analysis:</strong> Cantilever box-spar bending and load-stress assessments.</li>
-                    <li><strong className="text-slate-805">Parametric Geometry:</strong> Real-time propagation of configurable geometric relationships.</li>
-                    <li><strong className="text-slate-805">CAD Export:</strong> High-fidelity NURBS boundary representation STEP and IGES model generation.</li>
-                  </ul>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">Data & Design Storage</h3>
-                  <p>
-                    TurboDESiM Aero supports local design storage and optional secure cloud synchronization. Where cloud synchronization is active, your design data is protected using **client-side encryption** before it leaves your device.
-                  </p>
-                  
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                    <h5 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider flex items-center gap-1.5">🛡️ Privacy by Design</h5>
-                    <ul className="grid grid-cols-2 gap-2 text-[10px] font-semibold text-slate-600">
-                      <li className="flex items-center gap-1.5">✓ AES-256-GCM encryption</li>
-                      <li className="flex items-center gap-1.5">✓ Client-side encryption</li>
-                      <li className="flex items-center gap-1.5">✓ Passphrase-based protection</li>
-                      <li className="flex items-center gap-1.5">✓ Passphrase is never uploaded</li>
-                    </ul>
-                  </div>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">Who Is TurboDESiM Aero For?</h3>
-                  <p>
-                    TurboDESiM Aero is intended for aerospace engineers, aircraft designers, UAV developers, research teams, students, and startups looking to rapidly build, iterate, and compare configurations.
-                  </p>
-
-                  <h3 className="text-sm font-extrabold text-slate-900 pt-2 border-b border-slate-100 pb-1">Engineering Disclaimer</h3>
-                  <p className="text-[11px] text-slate-500 italic bg-amber-50/50 border border-amber-100 p-3 rounded-lg leading-relaxed">
-                    TurboDESiM Aero is intended primarily for <strong>conceptual and preliminary engineering analysis</strong>. Results should be independently verified before being used for detailed design, manufacturing, flight certification, safety-critical decisions, or regulatory compliance.
-                  </p>
-                </div>
-
-                {/* Footer copyright */}
-                <div className="pt-4 border-t border-slate-100 text-center text-[10px] text-slate-400 select-none">
-                  <strong className="text-slate-500 font-bold block">Developed by DESiM Innovations (OPC) Private Limited</strong>
-                  Licensed under the Apache License 2.0.
-                </div>
-              </div>
+              <MarkdownViewer content={ABOUT_CONTENT} />
             )}
 
             {/* TAB 2: DOCUMENTATION */}
             {activeTab === 'docs' && (
-              <div className="space-y-4 text-xs leading-relaxed text-slate-700">
-                <h4 className="font-extrabold text-sm text-slate-900 border-b border-slate-100 pb-1.5 select-none">Quick Start Guide</h4>
-                
-                <div className="space-y-3">
-                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <strong className="text-sky-850 font-bold block mb-1">1. Creating Components</strong>
-                    Use the <strong>"Add Component"</strong> menu to add wings, fuselages, tail stabilizers, or engine nacelles to the tree. Customize their spans, sweeps, dihedrals, or positions in the properties panel.
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <strong className="text-sky-850 font-bold block mb-1">2. Sizing Materials</strong>
-                    Select components and assign materials (Alclad Aluminum, Carbon Fiber, Sitka Spruce) in the properties dropdown to update empty weights, CG calculations, and structural stress thresholds.
-                  </div>
-
-                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <strong className="text-sky-850 font-bold block mb-1">3. Running Solver Tools</strong>
-                    Navigate to <strong>"Tools"</strong> to evaluate wing aerodynamics using the lifting-line solver (elliptical loading shape) or calculate spar shear forces, moment, and safety margins under custom G-loadings.
-                  </div>
-                </div>
-              </div>
+              <MarkdownViewer content={USERGUIDE_CONTENT} />
             )}
 
             {/* TAB 3: KEYBOARD SHORTCUTS */}
@@ -285,6 +267,26 @@ export function AboutModal() {
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* TAB 4: DISCLAIMER */}
+            {activeTab === 'disclaimer' && (
+              <MarkdownViewer content={DISCLAIMER_CONTENT} />
+            )}
+
+            {/* TAB 5: EULA */}
+            {activeTab === 'eula' && (
+              <MarkdownViewer content={EULA_CONTENT} />
+            )}
+
+            {/* TAB 6: PRIVACY POLICY */}
+            {activeTab === 'privacy' && (
+              <MarkdownViewer content={PRIVACY_CONTENT} />
+            )}
+
+            {/* TAB 7: TERMS OF SERVICE */}
+            {activeTab === 'terms' && (
+              <MarkdownViewer content={TERMS_CONTENT} />
             )}
 
           </div>

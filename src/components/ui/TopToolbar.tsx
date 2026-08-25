@@ -26,9 +26,14 @@ import {
   Layers,
   Settings,
   HelpCircle,
+  BookOpen,
   Info,
   Key,
-  Edit2
+  Edit2,
+  ShieldAlert,
+  FileText,
+  Lock,
+  Scale
 } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -45,6 +50,7 @@ export function TopToolbar() {
   const addEngine = useAircraftStore((state) => state.addEngine);
   const addFuselageSection = useAircraftStore((state) => state.addFuselageSection);
   const updateModelName = useAircraftStore((state) => state.updateModelName);
+  const updateFuselage = useAircraftStore((state) => state.updateFuselage);
 
   const units = useUIStore((state) => state.units);
   const setUnits = useUIStore((state) => state.setUnits);
@@ -58,6 +64,7 @@ export function TopToolbar() {
   const showGrid = useUIStore((state) => state.showGrid);
   const toggleGrid = useUIStore((state) => state.toggleGrid);
   const setHelpTab = useUIStore((state) => state.setHelpTab);
+  const setDatabaseTab = useUIStore((state) => state.setDatabaseTab);
 
   const flowSimulationActive = useUIStore((state) => state.flowSimulationActive);
   const toggleFlowSimulation = useUIStore((state) => state.toggleFlowSimulation);
@@ -243,6 +250,12 @@ export function TopToolbar() {
             {activeDropdown === 'add' && (
               <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
                 <button
+                  onClick={() => { updateFuselage({ visible: true }); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Plus className="w-3.5 h-3.5 text-sky-600" /> Standard Fuselage
+                </button>
+                <button
                   onClick={() => { addFuselageSection(); setActiveDropdown(null); }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
@@ -303,7 +316,11 @@ export function TopToolbar() {
                   <Sliders className="w-3.5 h-3.5 text-sky-600" /> 2D Cross-Section Sketcher
                 </button>
                 <button
-                  onClick={() => { openModal('airfoil'); setActiveDropdown(null); }}
+                  onClick={() => {
+                    openModal('database');
+                    setDatabaseTab('airfoils');
+                    setActiveDropdown(null);
+                  }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
                   <Library className="w-3.5 h-3.5 text-emerald-600" /> NACA Airfoil Library
@@ -468,11 +485,22 @@ export function TopToolbar() {
                 <button
                   onClick={() => {
                     openModal('database');
+                    setDatabaseTab('materials');
                     setActiveDropdown(null);
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
-                  <Layers className="w-3.5 h-3.5 text-cyan-605" /> Materials Library
+                  <Layers className="w-3.5 h-3.5 text-cyan-605" /> Materials Catalog
+                </button>
+                <button
+                  onClick={() => {
+                    openModal('database');
+                    setDatabaseTab('airfoils');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Library className="w-3.5 h-3.5 text-emerald-600" /> NACA Airfoil Library
                 </button>
                 <div className="my-1 border-t border-slate-200" />
                 <button
@@ -574,7 +602,7 @@ export function TopToolbar() {
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
-                  <HelpCircle className="w-3.5 h-3.5 text-slate-500" /> Help & Documentation
+                  <BookOpen className="w-3.5 h-3.5 text-slate-500" /> Quick Start Docs
                 </button>
                 <button
                   onClick={() => {
@@ -585,6 +613,47 @@ export function TopToolbar() {
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
                   <Key className="w-3.5 h-3.5 text-slate-500" /> Keyboard Shortcuts
+                </button>
+                <div className="my-1 border-t border-slate-200" />
+                <button
+                  onClick={() => {
+                    setHelpTab('disclaimer');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Safety Disclaimer
+                </button>
+                <button
+                  onClick={() => {
+                    setHelpTab('eula');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <FileText className="w-3.5 h-3.5 text-slate-500" /> License (EULA)
+                </button>
+                <button
+                  onClick={() => {
+                    setHelpTab('privacy');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-500" /> Privacy Policy
+                </button>
+                <button
+                  onClick={() => {
+                    setHelpTab('terms');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Scale className="w-3.5 h-3.5 text-slate-500" /> Terms of Service
                 </button>
               </div>
             )}
@@ -626,7 +695,10 @@ export function TopToolbar() {
         </button>
 
         <button
-          onClick={() => openModal('airfoil')}
+          onClick={() => {
+            openModal('database');
+            setDatabaseTab('airfoils');
+          }}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-white hover:bg-slate-50 text-emerald-700 font-medium border border-slate-200 transition shadow-sm"
         >
           <Library className="w-3.5 h-3.5 text-emerald-600" />

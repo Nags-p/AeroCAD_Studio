@@ -614,7 +614,7 @@ export const AIRCRAFT_PRESETS: Record<string, AircraftModel> = {
     fuselage: {
       id: 'fus-blank',
       name: 'Standard Fuselage',
-      visible: false,
+      visible: true,
       locked: false,
       length: 10.0,
       radius: 1.5,

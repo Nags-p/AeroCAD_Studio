@@ -33,7 +33,8 @@ interface UIStoreState {
   currentView: 'dashboard' | 'editor';
   contextMenu: ContextMenuConfig;
   activeEngineeringTab: EngineeringTabType;
-  activeHelpTab: 'about' | 'docs' | 'keys';
+  activeHelpTab: 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
+  activeDatabaseTab: 'materials' | 'airfoils' | 'sections' | 'payload';
   viewportTheme: 'studio' | 'dark' | 'white' | 'sky';
 
   setCameraView: (view: CameraPresetView) => void;
@@ -64,7 +65,8 @@ interface UIStoreState {
   analysisMode: AnalysisModeType;
   setAnalysisMode: (mode: AnalysisModeType) => void;
   setEngineeringTab: (tab: EngineeringTabType) => void;
-  setHelpTab: (tab: 'about' | 'docs' | 'keys') => void;
+  setHelpTab: (tab: 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms') => void;
+  setDatabaseTab: (tab: 'materials' | 'airfoils' | 'sections' | 'payload') => void;
   setViewportTheme: (theme: 'studio' | 'dark' | 'white' | 'sky') => void;
 }
 
@@ -99,6 +101,7 @@ export const useUIStore = create<UIStoreState>()(
       analysisMode: 'none',
       activeEngineeringTab: 'atmosphere',
       activeHelpTab: 'about',
+      activeDatabaseTab: 'materials',
       viewportTheme: 'studio',
 
       setCameraView: (view) => set({ cameraView: view }),
@@ -140,6 +143,7 @@ export const useUIStore = create<UIStoreState>()(
       setAnalysisMode: (mode) => set({ analysisMode: mode }),
       setEngineeringTab: (tab) => set({ activeEngineeringTab: tab }),
       setHelpTab: (tab) => set({ activeHelpTab: tab }),
+      setDatabaseTab: (tab) => set({ activeDatabaseTab: tab }),
       setViewportTheme: (theme) => set({ viewportTheme: theme }),
     }),
     {

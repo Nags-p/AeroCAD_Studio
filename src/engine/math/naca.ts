@@ -76,11 +76,35 @@ export function generateNACA4Digit(nacaCode: string, numPoints: number = 60): Ai
  * Pre-baked airfoil library options
  */
 export const BUILTIN_AIRFOILS = [
-  'NACA 0012',
-  'NACA 2412',
-  'NACA 4412',
+  // Symmetric Airfoils (No Camber)
+  'NACA 0006',
   'NACA 0009',
-  'NACA 6412',
-  'NACA 2415',
+  'NACA 0010',
+  'NACA 0012',
   'NACA 0015',
+  'NACA 0018',
+  'NACA 0024',
+  
+  // Moderately Cambered Airfoils (Standard GA & Transports)
+  'NACA 1408',
+  'NACA 1412',
+  'NACA 2408',
+  'NACA 2410',
+  'NACA 2412',
+  'NACA 2415',
+  'NACA 2418',
+  'NACA 2424',
+  
+  // Highly Cambered Airfoils (High-Lift & Cargo Wings)
+  'NACA 4412',
+  'NACA 4415',
+  'NACA 4418',
+  'NACA 4421',
+  'NACA 4424',
+  
+  // Extreme Camber Airfoils (STOL & Vintage Gliders)
+  'NACA 6409',
+  'NACA 6412',
+  'NACA 6415',
+  'NACA 9412',
 ];
