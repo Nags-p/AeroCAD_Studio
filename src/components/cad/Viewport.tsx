@@ -55,6 +55,7 @@ export function Viewport() {
   const showContextMenu = useUIStore((state) => state.showContextMenu);
   const setSelected = useAircraftStore((state) => state.setSelected);
   const model = useAircraftStore((state) => state.model);
+  const viewportTheme = useUIStore((state) => state.viewportTheme || 'studio');
 
   const flowSimulationActive = useUIStore((state) => state.flowSimulationActive);
   const flowColormapMode = useUIStore((state) => state.flowColormapMode);
@@ -62,20 +63,40 @@ export function Viewport() {
 
   const aero = useMemo(() => calculateAeroMetrics(model, flowVelocity), [model, flowVelocity]);
 
+  const getBackgroundColor = (theme: string) => {
+    switch (theme) {
+      case 'dark': return '#0F172A';
+      case 'white': return '#FFFFFF';
+      case 'sky': return '#BAE6FD';
+      case 'studio':
+      default: return '#E2E8F0';
+    }
+  };
+
+  const getWrapperBgClass = (theme: string) => {
+    switch (theme) {
+      case 'dark': return 'bg-slate-900';
+      case 'white': return 'bg-white';
+      case 'sky': return 'bg-sky-200';
+      case 'studio':
+      default: return 'bg-slate-200';
+    }
+  };
+
   return (
     <div
       onContextMenu={(e) => {
         e.preventDefault();
         showContextMenu(e.clientX, e.clientY, null, 'canvas');
       }}
-      className="w-full h-full relative bg-slate-200 overflow-hidden select-none"
+      className={`w-full h-full relative overflow-hidden select-none transition-colors duration-300 ${getWrapperBgClass(viewportTheme)}`}
     >
       <Canvas
         camera={{ position: [-25, 20, 35], fov: 45, near: 0.1, far: 1000 }}
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         onPointerMissed={() => setSelected(null, null)}
       >
-        <color attach="background" args={['#E2E8F0']} />
+        <color attach="background" args={[getBackgroundColor(viewportTheme)]} />
         <ambientLight intensity={0.8} />
         <directionalLight position={[40, 60, 50]} intensity={1.3} castShadow />
         <directionalLight position={[-40, -30, -40]} intensity={0.5} />

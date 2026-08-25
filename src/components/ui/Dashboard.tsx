@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useFileStore } from '@/store/useFileStore';
+import { useUIStore } from '@/store/useUIStore';
 import { AircraftThumbnail } from './AircraftThumbnail';
 import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 import {
@@ -20,7 +21,10 @@ import {
   ShieldCheck,
   LogOut,
   RotateCcw,
-  Pencil
+  Pencil,
+  HelpCircle,
+  Info,
+  ChevronDown
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -46,6 +50,10 @@ export function Dashboard() {
 
   const [newFileName, setNewFileName] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('blank');
+  
+  const openModal = useUIStore((state) => state.openModal);
+  const setHelpTab = useUIStore((state) => state.setHelpTab);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // Rename state
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
@@ -127,7 +135,7 @@ export function Dashboard() {
       <div className="absolute inset-0 bg-gradient-to-tr from-sky-50/50 via-slate-50 to-indigo-50/30 pointer-events-none" />
 
       {/* Header */}
-      <header className="h-16 border-b border-slate-200 px-8 flex items-center justify-between bg-white/80 backdrop-blur-md relative z-10 shadow-sm">
+      <header className="h-16 border-b border-slate-200 px-8 flex items-center justify-between bg-white/80 backdrop-blur-md relative z-20 shadow-sm overflow-visible">
         <div className="flex items-center gap-2 bg-sky-600 px-3 py-1.5 rounded-lg text-white font-bold text-base shadow">
           <Plane className="w-5 h-5 text-white stroke-[2.5]" />
           <span>TurboDESiM Aero</span>
@@ -136,6 +144,56 @@ export function Dashboard() {
 
         {/* Cloud Sync Status Indicator */}
         <div className="flex items-center gap-3">
+          {/* Help Dropdown Menu */}
+          <div className="relative mr-2">
+            <button
+              onClick={() => setIsHelpOpen(!isHelpOpen)}
+              className="text-slate-600 hover:text-slate-900 font-bold text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition select-none cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-slate-500" />
+              <span>Help & About</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+            {isHelpOpen && (
+              <>
+                {/* Invisible backdrop to close on click-outside */}
+                <div className="fixed inset-0 z-40" onClick={() => setIsHelpOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setHelpTab('about');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5 text-slate-500" /> About TurboDESiM Aero
+                  </button>
+                  <div className="my-1 border-t border-slate-200" />
+                  <button
+                    onClick={() => {
+                      setHelpTab('docs');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-500" /> Help & Documentation
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHelpTab('keys');
+                      openModal('about');
+                      setIsHelpOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800 cursor-pointer"
+                  >
+                    <Key className="w-3.5 h-3.5 text-slate-500" /> Keyboard Shortcuts
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {driveAccessToken ? (
             <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 text-xs">
               <Cloud className="w-3.5 h-3.5 text-emerald-600" />
@@ -394,28 +452,14 @@ export function Dashboard() {
           </div>
 
           {/* Bottom Row: Cloud Sync Info */}
-          <div className="bg-gradient-to-r from-sky-50/40 via-indigo-50/20 to-slate-100/40 p-5 rounded-2xl border border-sky-100 shadow-sm flex items-start gap-4">
-            <div className="p-3 rounded-xl bg-sky-100/50 border border-sky-200 text-sky-600">
-              <Cloud className="w-6 h-6" />
+          <div className="bg-sky-50/50 px-4 py-2.5 rounded-xl border border-sky-100 flex items-center justify-between gap-4 text-[11px] text-slate-600 select-none shadow-sm">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0" />
+              <span className="font-bold text-slate-700">Recommended Secure Sync:</span>
+              <span className="text-slate-500">Designs are encrypted locally using <strong className="text-slate-600 font-bold font-mono">AES-256-GCM</strong> before syncing to Google Drive.</span>
             </div>
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-800">Recommended: Secure Cloud Sync Integration</h3>
-                <span className="text-[9px] bg-sky-100 text-sky-700 border border-sky-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">
-                  Active
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                TurboDESiM Aero supports secure client-side encryption. Connect Google Drive to sync your design files. We encrypt the files locally using **AES-256-GCM** before uploading them, making it impossible for third parties (or Google) to read your designs without your passphrase.
-              </p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1">
-                  <Lock className="w-3 h-3 text-sky-600" /> AES-256 Client-Side Encryption
-                </span>
-                <span className="flex items-center gap-1">
-                  <ShieldAlert className="w-3 h-3 text-amber-600" /> Passphrase is Never Uploaded
-                </span>
-              </div>
+            <div className="flex items-center gap-1.5 text-slate-400 font-semibold whitespace-nowrap shrink-0 text-[10px]">
+              <Lock className="w-3.5 h-3.5 text-sky-500" /> Passphrase is Never Uploaded
             </div>
           </div>
         </section>
@@ -423,7 +467,7 @@ export function Dashboard() {
 
       {/* --- Passphrase Modal --- */}
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-6 space-y-6 shadow-xl relative overflow-hidden text-slate-800">
             {/* Background Accent glow */}
             <div className="absolute -top-12 -right-12 w-24 h-24 bg-sky-50 rounded-full blur-2xl pointer-events-none" />
@@ -511,7 +555,7 @@ export function Dashboard() {
 
       {/* --- Hangar Scrap Yard Modal --- */}
       {isScrapYardOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-6 shadow-xl relative overflow-hidden text-slate-800 flex flex-col max-h-[85vh]">
             {/* Background Accent glow */}
             <div className="absolute -top-12 -right-12 w-24 h-24 bg-sky-50 rounded-full blur-2xl pointer-events-none" />

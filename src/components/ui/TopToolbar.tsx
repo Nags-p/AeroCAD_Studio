@@ -18,7 +18,17 @@ import {
   FilePlus,
   Copy,
   LogOut,
-  Wind
+  Wind,
+  Cloud,
+  Compass,
+  LineChart,
+  Hammer,
+  Layers,
+  Settings,
+  HelpCircle,
+  Info,
+  Key,
+  Edit2
 } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -34,6 +44,7 @@ export function TopToolbar() {
   const addTail = useAircraftStore((state) => state.addTail);
   const addEngine = useAircraftStore((state) => state.addEngine);
   const addFuselageSection = useAircraftStore((state) => state.addFuselageSection);
+  const updateModelName = useAircraftStore((state) => state.updateModelName);
 
   const units = useUIStore((state) => state.units);
   const setUnits = useUIStore((state) => state.setUnits);
@@ -43,6 +54,10 @@ export function TopToolbar() {
   const setTessellationQuality = useUIStore((state) => state.setTessellationQuality);
   const analysisMode = useUIStore((state) => state.analysisMode);
   const setAnalysisMode = useUIStore((state) => state.setAnalysisMode);
+  const setEngineeringTab = useUIStore((state) => state.setEngineeringTab);
+  const showGrid = useUIStore((state) => state.showGrid);
+  const toggleGrid = useUIStore((state) => state.toggleGrid);
+  const setHelpTab = useUIStore((state) => state.setHelpTab);
 
   const flowSimulationActive = useUIStore((state) => state.flowSimulationActive);
   const toggleFlowSimulation = useUIStore((state) => state.toggleFlowSimulation);
@@ -59,11 +74,37 @@ export function TopToolbar() {
   const files = useFileStore((state) => state.files);
   const activeFile = files.find((f) => f.id === activeFileId);
   const createNewFile = useFileStore((state) => state.createNewFile);
+  const renameFile = useFileStore((state) => state.renameFile);
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
 
   const toggleDropdown = (name: string) => {
     setActiveDropdown((prev) => (prev === name ? null : name));
+  };
+
+  const handleStartRename = () => {
+    setTempName(activeFile ? activeFile.name : model.name || 'Temporary Design');
+    setIsEditingName(true);
+  };
+
+  const handleFinishRename = () => {
+    setIsEditingName(false);
+    const cleaned = tempName.trim();
+    if (!cleaned) return;
+    updateModelName(cleaned);
+    if (activeFileId) {
+      renameFile(activeFileId, cleaned);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleFinishRename();
+    } else if (e.key === 'Escape') {
+      setIsEditingName(false);
+    }
   };
 
   return (
@@ -86,9 +127,26 @@ export function TopToolbar() {
         <span className="text-slate-300">/</span>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 max-w-[150px] truncate" title={activeFile ? activeFile.name : model.name || 'Temporary Design'}>
-            {activeFile ? activeFile.name : model.name || 'Temporary Design'}
-          </span>
+          {isEditingName ? (
+            <input
+              type="text"
+              autoFocus
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onBlur={handleFinishRename}
+              onKeyDown={handleKeyDown}
+              className="text-xs font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-sky-400 max-w-[200px] outline-none shadow-[0_0_0_2.5px_rgba(56,189,248,0.18)]"
+            />
+          ) : (
+            <button
+              onClick={handleStartRename}
+              className="text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 hover:border-slate-350 px-2 py-0.5 rounded border border-slate-200 max-w-[180px] truncate transition flex items-center gap-1 group select-none cursor-pointer"
+              title="Click to rename design"
+            >
+              <span>{activeFile ? activeFile.name : model.name || 'Temporary Design'}</span>
+              <Edit2 className="w-2.5 h-2.5 text-slate-400 group-hover:text-slate-600 transition" />
+            </button>
+          )}
           <span className="text-[9px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-0.5 font-mono select-none">
             <Check className="w-3 h-3 text-emerald-500" /> Saved
           </span>
@@ -259,6 +317,34 @@ export function TopToolbar() {
 
                 <div className="my-1 border-t border-slate-200" />
 
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aerospace Engineering</div>
+                <button
+                  onClick={() => { setEngineeringTab('atmosphere'); openModal('engineering'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-sky-600" /> Standard Atmosphere
+                </button>
+                <button
+                  onClick={() => { setEngineeringTab('stability'); openModal('engineering'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Compass className="w-3.5 h-3.5 text-amber-600" /> Stability & Trim Analysis
+                </button>
+                <button
+                  onClick={() => { setEngineeringTab('aerodynamics'); openModal('engineering'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <LineChart className="w-3.5 h-3.5 text-emerald-600" /> Wing Aerodynamics (LLT)
+                </button>
+                <button
+                  onClick={() => { setEngineeringTab('structures'); openModal('engineering'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-150 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Hammer className="w-3.5 h-3.5 text-purple-600" /> Wing Spar Bending (FEA)
+                </button>
+
+                <div className="my-1 border-t border-slate-200" />
+
                 <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">3D Analysis Views</div>
                 <button
                   onClick={() => { setAnalysisMode('none'); setActiveDropdown(null); }}
@@ -364,6 +450,142 @@ export function TopToolbar() {
                     </div>
                   </>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* Database Menu */}
+          <div className="relative">
+            <button
+              onClick={() => toggleDropdown('database_menu')}
+              className="px-2.5 py-1 rounded hover:bg-slate-100 transition flex items-center gap-1"
+            >
+              <span>Database</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+            {activeDropdown === 'database_menu' && (
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                <button
+                  onClick={() => {
+                    openModal('database');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Layers className="w-3.5 h-3.5 text-cyan-605" /> Materials Library
+                </button>
+                <div className="my-1 border-t border-slate-200" />
+                <button
+                  disabled
+                  className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 text-slate-300 cursor-not-allowed"
+                >
+                  <Ruler className="w-3.5 h-3.5 text-slate-250" /> Standard Spar Sections (Soon)
+                </button>
+                <button
+                  disabled
+                  className="w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 text-slate-300 cursor-not-allowed"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-250" /> Payload & Avionics (Soon)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Settings Menu */}
+          <div className="relative">
+            <button
+              onClick={() => toggleDropdown('settings_menu')}
+              className="px-2.5 py-1 rounded hover:bg-slate-100 transition flex items-center gap-1"
+            >
+              <span>Settings</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+            {activeDropdown === 'settings_menu' && (
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                <button
+                  onClick={() => {
+                    openModal('settings');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Settings className="w-3.5 h-3.5 text-slate-500" /> Application Settings...
+                </button>
+                <div className="my-1 border-t border-slate-200" />
+                <button
+                  onClick={() => {
+                    setUnits(units === 'metric' ? 'imperial' : 'metric');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center justify-between text-slate-800"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sliders className="w-3.5 h-3.5 text-slate-405" /> Toggle Unit System
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 px-1 bg-slate-100 rounded">
+                    {units === 'metric' ? 'Metric' : 'Imperial'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    toggleGrid();
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center justify-between text-slate-800"
+                >
+                  <span className="flex items-center gap-2">
+                    <Ruler className="w-3.5 h-3.5 text-slate-405" /> Viewport Grid Lines
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400 px-1 bg-slate-100 rounded">
+                    {showGrid ? 'On' : 'Off'}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Help Menu */}
+          <div className="relative">
+            <button
+              onClick={() => toggleDropdown('help_menu')}
+              className="px-2.5 py-1 rounded hover:bg-slate-100 transition flex items-center gap-1"
+            >
+              <span>Help</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+            {activeDropdown === 'help_menu' && (
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+                <button
+                  onClick={() => {
+                    setHelpTab('about');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Info className="w-3.5 h-3.5 text-slate-500" /> About TurboDESiM Aero
+                </button>
+                <div className="my-1 border-t border-slate-205" />
+                <button
+                  onClick={() => {
+                    setHelpTab('docs');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-500" /> Help & Documentation
+                </button>
+                <button
+                  onClick={() => {
+                    setHelpTab('keys');
+                    openModal('about');
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                >
+                  <Key className="w-3.5 h-3.5 text-slate-500" /> Keyboard Shortcuts
+                </button>
               </div>
             )}
           </div>

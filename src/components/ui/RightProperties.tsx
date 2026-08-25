@@ -306,6 +306,30 @@ function Station2DSketchCanvas({
   );
 }
 
+function renderMaterialOptions() {
+  const categories = {
+    metals: 'Metals',
+    composites: 'Composites',
+    woods: 'Woods',
+    fabrics: 'Fabrics & Skins',
+    specialty: 'Specialty & Canopies',
+  };
+
+  return Object.entries(categories).map(([catKey, catName]) => {
+    const mats = Object.values(MATERIALS_LIBRARY).filter((m) => m.category === catKey);
+    if (mats.length === 0) return null;
+    return (
+      <optgroup key={catKey} label={catName}>
+        {mats.map((mat) => (
+          <option key={mat.id} value={mat.id}>
+            {mat.name} ({mat.density} kg/m³)
+          </option>
+        ))}
+      </optgroup>
+    );
+  });
+}
+
 export function RightProperties() {
   const model = useAircraftStore((state) => state.model);
   const selectedId = useAircraftStore((state) => state.selectedId);
@@ -455,11 +479,7 @@ export function RightProperties() {
                 onChange={(e) => updateFuselage({ material: e.target.value })}
                 className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
               >
-                {Object.values(MATERIALS_LIBRARY).map((mat) => (
-                  <option key={mat.id} value={mat.id}>
-                    {mat.name} ({mat.density} kg/m³)
-                  </option>
-                ))}
+                {renderMaterialOptions()}
               </select>
             </div>
           </div>
@@ -944,11 +964,7 @@ export function RightProperties() {
                 onChange={(e) => updateWing(activeWing.id, { material: e.target.value })}
                 className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
               >
-                {Object.values(MATERIALS_LIBRARY).map((mat) => (
-                  <option key={mat.id} value={mat.id}>
-                    {mat.name} ({mat.density} kg/m³)
-                  </option>
-                ))}
+                {renderMaterialOptions()}
               </select>
             </div>
           </div>
@@ -1161,11 +1177,7 @@ export function RightProperties() {
                 onChange={(e) => updateTail(activeTail.id, { material: e.target.value })}
                 className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
               >
-                {Object.values(MATERIALS_LIBRARY).map((mat) => (
-                  <option key={mat.id} value={mat.id}>
-                    {mat.name} ({mat.density} kg/m³)
-                  </option>
-                ))}
+                {renderMaterialOptions()}
               </select>
             </div>
           </div>
@@ -1399,11 +1411,7 @@ export function RightProperties() {
                 onChange={(e) => updateEngine(activeEngine.id, { material: e.target.value })}
                 className="bg-slate-50 border border-slate-300 rounded p-1 text-[11px] font-bold text-slate-800 w-44"
               >
-                {Object.values(MATERIALS_LIBRARY).map((mat) => (
-                  <option key={mat.id} value={mat.id}>
-                    {mat.name} ({mat.density} kg/m³)
-                  </option>
-                ))}
+                {renderMaterialOptions()}
               </select>
             </div>
           </div>

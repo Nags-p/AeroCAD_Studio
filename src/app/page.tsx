@@ -12,6 +12,10 @@ import { AirfoilLibrary } from '@/components/ui/AirfoilLibrary';
 import { PresetSelector } from '@/components/ui/PresetSelector';
 import { MeasurementsPanel } from '@/components/ui/MeasurementsPanel';
 import { ExportImportModal } from '@/components/ui/ExportImportModal';
+import { EngineeringToolsModal } from '@/components/ui/EngineeringToolsModal';
+import { DesignDatabaseModal } from '@/components/ui/DesignDatabaseModal';
+import { SettingsModal } from '@/components/ui/SettingsModal';
+import { AboutModal } from '@/components/ui/AboutModal';
 import { Dashboard } from '@/components/ui/Dashboard';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { useUIStore } from '@/store/useUIStore';
@@ -37,6 +41,10 @@ export default function TurboDESiMAero() {
   useEffect(() => {
     loadFiles();
   }, [loadFiles]);
+
+  useEffect(() => {
+    useUIStore.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -70,7 +78,12 @@ export default function TurboDESiMAero() {
   }, [undo, redo]);
 
   if (currentView === 'dashboard') {
-    return <Dashboard />;
+    return (
+      <>
+        <Dashboard />
+        <AboutModal />
+      </>
+    );
   }
 
   return (
@@ -102,6 +115,10 @@ export default function TurboDESiMAero() {
       <PresetSelector />
       <MeasurementsPanel />
       <ExportImportModal />
+      <EngineeringToolsModal />
+      <DesignDatabaseModal />
+      <SettingsModal />
+      <AboutModal />
       <ContextMenu />
     </main>
   );

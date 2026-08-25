@@ -41,6 +41,7 @@ interface AircraftStoreState {
   redo: () => void;
   jumpToHistoryIndex: (index: number) => void;
   duplicateComponent: (id: string, type: 'wing' | 'tail' | 'engine') => void;
+  updateModelName: (name: string) => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -141,6 +142,12 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     canRedo: false,
 
     setSelected: (id, type) => set({ selectedId: id, selectedType: type }),
+
+    updateModelName: (name) => {
+      const model = get().model;
+      const newModel = { ...model, name };
+      pushState(newModel, `Rename Model to "${name}"`);
+    },
 
     updateFuselage: (params) => {
       const model = get().model;

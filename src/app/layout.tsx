@@ -3,8 +3,8 @@ import Script from 'next/script';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TurboDESiM Aero - Parametric Browser Aircraft CAD',
-  description: 'Browser-based conceptual aircraft design software powered by procedural mathematical geometry and Three.js',
+  title: 'TurboDESiM Aero',
+  description: 'Parametric conceptual aircraft design software powered by procedural mathematical geometry and Three.js',
 };
 
 export default function RootLayout({
