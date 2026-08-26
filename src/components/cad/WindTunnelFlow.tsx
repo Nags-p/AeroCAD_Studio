@@ -55,39 +55,46 @@ export function WindTunnelFlow() {
     let velocityMultiplier = 1.0;
 
     // 1. Fuselage Deflection (extending from x = 0 (nose) to x = flen (tail))
-    const flen = model.fuselage.length;
-    const fRadius = model.fuselage.radius || 1.2;
-    
-    // deflections start smoothly upstream at x = -fRadius * 1.5 and down to tail
-    const fStart = -fRadius * 1.5;
-    const fEnd = flen + fRadius;
-    if (x >= fStart && x <= fEnd) {
-      let localRadius = 0;
-      if (x < 0) {
-        // Upstream pre-deflection zone
-        const tUp = (x - fStart) / (0 - fStart);
-        localRadius = tUp * fRadius * 0.45;
-      } else if (x <= flen) {
-        // Along the fuselage body
-        const t = x / flen;
-        localRadius = Math.sin(t * Math.PI) * fRadius;
-      } else {
-        // Downstream wake closure
-        const tDown = 1.0 - (x - flen) / fRadius;
-        localRadius = Math.max(0, tDown) * fRadius * 0.45;
-      }
-
-      const r0 = Math.sqrt(y0 * y0 + z0 * z0);
-      if (r0 > 0.01) {
-        // High-fidelity snug deflection using circle intersection math
-        const dFactor = Math.sqrt(r0 * r0 + localRadius * localRadius) / r0;
-        y = y0 * dFactor;
-        z = z0 * dFactor;
-        
-        // Velocity updates (speedup on mid-fuselage, slowdown at stagnation points)
-        if (x >= 0 && x <= flen) {
+    if (model.fuselage && model.fuselage.visible !== false) {
+      const flen = model.fuselage.length;
+      const fRadius = model.fuselage.radius || 1.2;
+      
+      const fStart = -fRadius * 3.0;
+      const fEnd = flen + fRadius * 3.0;
+      if (x >= fStart && x <= fEnd) {
+        let localRadius = 0;
+        if (x < 0) {
+          // Upstream pre-deflection zone (exponential decay)
+          const tUp = Math.exp(x / (fRadius * 1.2));
+          localRadius = tUp * fRadius * 0.35;
+        } else if (x <= flen) {
+          // Along the fuselage body
           const t = x / flen;
-          velocityMultiplier = 1.0 - (localRadius * 0.1) * Math.cos(t * Math.PI * 2);
+          const bodyRadius = Math.sin(t * Math.PI) * fRadius;
+          if (t < 0.15) {
+            const blend = t / 0.15;
+            localRadius = (1.0 - blend) * (fRadius * 0.35) + blend * bodyRadius;
+          } else {
+            localRadius = bodyRadius;
+          }
+        } else {
+          // Downstream wake closure (exponential decay)
+          const tDown = Math.exp(-(x - flen) / (fRadius * 1.2));
+          localRadius = tDown * fRadius * 0.2;
+        }
+
+        const r0 = Math.sqrt(y0 * y0 + z0 * z0);
+        if (r0 > 0.01) {
+          // High-fidelity snug deflection using circle intersection math
+          const dFactor = Math.sqrt(r0 * r0 + localRadius * localRadius) / r0;
+          y = y0 * dFactor;
+          z = z0 * dFactor;
+          
+          // Velocity updates (speedup on mid-fuselage, slowdown at stagnation points)
+          if (x >= 0 && x <= flen) {
+            const t = x / flen;
+            velocityMultiplier = 1.0 - (localRadius * 0.1) * Math.cos(t * Math.PI * 2);
+          }
         }
       }
     }

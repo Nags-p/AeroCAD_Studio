@@ -12,3 +12,38 @@ export const TERMS_CONTENT = "# Terms of Service\n\n**TurboDESiM Aero**\n**Effec
 
 export const USERGUIDE_CONTENT = "# TurboDESiM Aero — Quick Start Guide\n\n**Version 1.0.0**\n\nWelcome to TurboDESiM Aero. This guide walks you through creating, analyzing, and exporting your first aircraft configuration.\n\n---\n\n## 1. Create Your First Aircraft\n\n1. From the landing page, choose a starting template: **Blank Canvas**, **Tactical Cargo**, **Commercial Airliner**, or **Delta Strike Fighter**.\n2. A blank canvas gives you full control over every parameter; templates give you a pre-configured baseline you can modify.\n3. Your project is saved automatically to Local Disk storage unless you connect Google Drive sync.\n\n## 2. Configure the Fuselage\n\n1. Open the **Fuselage** component from the component tree.\n2. Define the fuselage cross-section, length, and diameter parameters.\n3. Use the 3D viewport to inspect the shape in **Solid** or **Wireframe** mode as you adjust values.\n\n## 3. Add Wings\n\n1. Select **Add Wing** from the component panel.\n2. Set wingspan, root/tip chord, sweep, dihedral, and spanwise placement relative to the fuselage.\n3. Use **X-Ray** or **Exploded** view to confirm correct positioning relative to other components.\n\n## 4. Configure Tail\n\n1. Add horizontal and vertical tail assemblies from the **Empennage** section.\n2. Set span, chord, sweep, and mounting position (conventional, T-tail, or cruciform, depending on configuration support).\n\n## 5. Add Engines\n\n1. Add engine nacelles from the **Propulsion** panel.\n2. Set mounting position (wing-mounted, fuselage-mounted, etc.), count, and basic propulsion parameters.\n\n## 6. Run Analysis\n\n1. Open the **Aerodynamics** panel to review lift coefficient, drag coefficient, lift-to-drag ratio, and lift distribution across angle-of-attack ranges.\n2. Open the **Structures** panel to review preliminary wing bending, shear force, bending moment, and deflection estimates under distributed aerodynamic loading.\n3. Open the **Weight & Balance** panel to review component weight breakdown and centre-of-gravity location.\n\n> Remember: these are preliminary, conceptual-design-level estimates. See the Engineering & Liability Disclaimer before relying on results for detailed design or certification.\n\n## 7. Export CAD\n\n1. Once your configuration is finalized, open **Export → CAD Geometry**.\n2. Choose your target format and export the geometry for use in downstream CAD environments.\n\n---\n\n## Viewport Controls\n\n- **Rotate:** Click and drag\n- **Pan:** Right-click and drag (or two-finger drag on trackpad)\n- **Zoom:** Scroll wheel / pinch gesture\n- **View presets:** Top, Front, Side, Perspective, Isometric, Orthographic\n- **Render modes:** Solid, Wireframe, X-Ray, Exploded\n\n## Saving & Sync\n\n- **Local Disk (default):** Your project stays on your device only.\n- **Google Drive Sync (optional):** Connect your Google account to sync designs across devices.\n- **Encrypted Sync (optional):** Enable a passphrase to encrypt design files client-side (AES-256-GCM) before they sync. Store your passphrase securely — it cannot be recovered if lost.\n\n---\n\nNeed more detail? See the full **Engineering** documentation (Aerodynamics, Structural Analysis, Weight & Balance, Coordinate System, Units & Conventions) within Help & Documentation.\n";
 
+export const SECURITY_CONTENT = `# Security & Storage Architecture
+
+### Local-First Privacy & Zero-Knowledge Encryption
+
+TurboDESiM Aero is built on a **local-first, privacy-respecting architecture**. Your aircraft design files belong to you, and they should remain completely under your control.
+
+---
+
+## 1. Client-Side Encryption (AES-256-GCM)
+When Google Drive synchronization is enabled, your design files are encrypted **on your device (inside your browser)** before they are ever transmitted to the cloud.
+
+- **Encryption Standard:** Advanced Encryption Standard (AES) in Galois/Counter Mode (GCM) with a 256-bit key length. AES-GCM provides both confidentiality and data integrity verification.
+- **Key Derivation (PBKDF2):** Your encryption key is derived from your secret passphrase using **PBKDF2 (Password-Based Key Derivation Function 2)** with **100,000 iterations** of the SHA-256 hashing algorithm and a unique 16-byte random salt.
+- **Initialization Vector (IV):** Each file is encrypted using a unique, random 12-byte initialization vector, ensuring that identical designs produce completely different encrypted files.
+
+---
+
+## 2. Zero-Knowledge Design
+Our system is designed under a **Zero-Knowledge** model:
+- **Passphrase Privacy:** Your decryption passphrase is saved locally in your browser's secure storage (\`localStorage\`) to decrypt files on load. **It is never sent to our servers, and it is never uploaded to Google.**
+- **No Backdoors:** We do not possess master keys or recovery functions. If you forget your passphrase, we cannot decrypt or recover your synced design files.
+
+---
+
+## 3. Hidden Google Drive Storage
+To avoid cluttering your personal Google Drive, the synchronized designs are saved inside a hidden container called the **AppData Folder**:
+- **Isolated Sandbox:** Files stored in the AppData Folder are only accessible by TurboDESiM Aero and cannot be viewed, deleted, or read by other applications or directly through the Google Drive web interface.
+- **Drive Permissions:** We request the minimum scopes required (\`drive.file\` and \`drive.appdata\`) to run this sandbox, preventing our application from reading any other files on your Google Drive.
+
+---
+
+## 4. Local Offline Mode
+If you do not connect Google Drive, your designs remain saved entirely in **Local Disk Storage** (the browser's local sandbox) and never leave your computer.
+`;
+

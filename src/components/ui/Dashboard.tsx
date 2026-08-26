@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   LogOut,
   RotateCcw,
+  RefreshCw,
   Pencil,
   HelpCircle,
   BookOpen,
@@ -46,6 +47,7 @@ export function Dashboard() {
     connectDrive,
     disconnectDrive,
     setDrivePassphrase,
+    syncWithDrive,
     restoreFile,
     deletePermanently,
     emptyScrapYard
@@ -142,7 +144,6 @@ export function Dashboard() {
         <div className="flex items-center gap-2 bg-sky-600 px-3 py-1.5 rounded-lg text-white font-bold text-base shadow">
           <Plane className="w-5 h-5 text-white stroke-[2.5]" />
           <span>TurboDESiM Aero</span>
-          <span className="text-[10px] uppercase font-mono px-1 py-0.2 bg-white/20 rounded text-white">PRO</span>
         </div>
 
         {/* Cloud Sync Status Indicator */}
@@ -245,12 +246,17 @@ export function Dashboard() {
               <div className="w-px h-3 bg-slate-300 mx-1" />
               {isSyncing ? (
                 <span className="text-sky-600 flex items-center gap-1 font-semibold">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Syncing...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Syncing...
                 </span>
               ) : (
-                <span className="text-emerald-600 font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> Encrypted Sync
-                </span>
+                <button
+                  onClick={() => syncWithDrive(true)}
+                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/80 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all duration-200 cursor-pointer select-none font-bold text-[11px] border border-emerald-200/50 hover:shadow-sm"
+                  title="Force Sync with Google Drive Now"
+                >
+                  <RefreshCw className="w-3 h-3 text-emerald-500" />
+                  <span>Sync Now</span>
+                </button>
               )}
               <button
                 onClick={() => setIsPasswordModalOpen(true)}
@@ -354,6 +360,43 @@ export function Dashboard() {
               <ArrowRight className="w-4 h-4 text-white" />
             </button>
           </form>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          {/* Secure Cloud Sync Card */}
+          <div className="space-y-2.5 text-xs">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <span className="text-base select-none">🔐</span>
+              <span>Secure Cloud Sync</span>
+            </h3>
+            <p className="text-slate-500 leading-normal text-[11px]">
+              Your aircraft designs remain encrypted on your device before synchronization.
+            </p>
+            {driveAccessToken ? (
+              <div className="space-y-2">
+                <div className="text-[11px] text-slate-650 bg-slate-50 border border-slate-200 rounded-lg p-2 font-mono flex items-center justify-between shadow-inner">
+                  <span className="truncate max-w-[130px] font-semibold">{driveEmail || 'Connected'}</span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">ACTIVE</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setHelpTab('security');
+                    openModal('about');
+                  }}
+                  className="text-sky-600 hover:text-sky-700 font-semibold flex items-center gap-1 transition select-none text-[11px] cursor-pointer"
+                >
+                  <span>Security & Storage Settings →</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleConnectDrive}
+                className="text-sky-600 hover:text-sky-700 font-semibold flex items-center gap-1 transition select-none text-[11px] cursor-pointer"
+              >
+                <span>Connect Google Drive →</span>
+              </button>
+            )}
+          </div>
         </section>
 
         {/* Center Column: Saved / Recent Files */}
@@ -493,18 +536,6 @@ export function Dashboard() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Bottom Row: Cloud Sync Info */}
-          <div className="bg-sky-50/50 px-4 py-2.5 rounded-xl border border-sky-100 flex items-center justify-between gap-4 text-[11px] text-slate-600 select-none shadow-sm">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0" />
-              <span className="font-bold text-slate-700">Recommended Secure Sync:</span>
-              <span className="text-slate-500">Designs are encrypted locally using <strong className="text-slate-600 font-bold font-mono">AES-256-GCM</strong> before syncing to Google Drive.</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-400 font-semibold whitespace-nowrap shrink-0 text-[10px]">
-              <Lock className="w-3.5 h-3.5 text-sky-500" /> Passphrase is Never Uploaded
-            </div>
           </div>
         </section>
       </main>

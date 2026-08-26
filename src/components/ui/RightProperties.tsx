@@ -1,13 +1,67 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move } from 'lucide-react';
+import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move, HelpCircle } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
 import { BUILTIN_AIRFOILS } from '@/engine/math/naca';
 import { SectionShapeType, FuselageSection } from '@/types/aircraft';
 import { generateSectionPoints } from '@/engine/math/superellipse';
 import { MATERIALS_LIBRARY } from '@/engine/data/materials';
+
+const PARAMETER_TOOLTIPS: Record<string, string> = {
+  // Fuselage Parameters
+  "Total Length": "Total length of the fuselage from nose tip to tail tip. Directly scales the aircraft cabin volume and structural weight.",
+  "Nose Roundness (S)": "Determines the sharpness or bluntness of the cockpit profile. Higher values create a more rounded, bulbous nose.",
+  "Nose Apex Z Shift": "Shifts the nose tip vertically. Positive values raise the nose cockpit profile, negative values droop it.",
+  "Nose Apex Y Shift": "Shifts the nose tip laterally (left or right) relative to the aircraft centerline.",
+  "Tail Tip Z Shift": "Shifts the tail cone tip vertically. Positive values upsweep the tail cone for runway ground clearance.",
+  "Tail Tip Y Shift": "Shifts the tail cone tip laterally relative to the aircraft centerline.",
+  "Scale X (Width)": "Width scaling factor of the fuselage geometry.",
+  "Scale Y (Height)": "Height scaling factor of the fuselage geometry.",
+
+  // Section Parameters
+  "Diameter": "Diameter of the circular cross-section at this fuselage station.",
+  "Width": "Maximum width (lateral scale) of the fuselage section at this station.",
+  "Height": "Maximum height (vertical scale) of the fuselage section at this station.",
+  "Exponent N (Height Power)": "Superellipse height exponent. Exponents greater than 2 flatten the top and bottom, creating a boxier cargo area.",
+  "Exponent M (Width Power)": "Superellipse width exponent. Exponents greater than 2 flatten the side walls to maximize cabin cabin width.",
+  "Corner Fillet Radius": "Rounds the corners of a rectangular cross-section. 0 is a sharp rectangle, 1 is fully rounded.",
+  "Fuselage Width": "Maximum width of this station.",
+  "Upper Deck Height": "Height of the upper half of the double-deck fuselage section.",
+  "Lower Cargo Height": "Height of the lower cargo compartment half of the double-deck fuselage section.",
+
+  // Wing Parameters
+  "Wingspan": "The total tip-to-tip span of the wings. Higher span increases aspect ratio, which reduces induced drag and improves gliding efficiency.",
+  "Root Chord": "The width of the wing section at the root (where it meets the fuselage). Larger root chord increases wing area and root strength.",
+  "Tip Chord": "The width of the wing section at the wingtips. Tapering the tip chord reduces wingtip weight and structural bending moment.",
+  "Sweep Angle (deg)": "The backward slant angle of the wing. High sweep delays wave drag onset in transonic/supersonic flight, but worsens low-speed lift.",
+  "Dihedral Angle (deg)": "The upward angle of the wings from root to tip. Positive dihedral provides lateral roll stability (inherent self-righting behavior).",
+  "Anhedral Angle (deg)": "The downward tilt of the wings. Commonly used on high-wing cargo planes to decrease excessive roll stability and improve maneuverability.",
+  "Taper Ratio": "Ratio of the tip chord to the root chord. A lower taper ratio reduces wing structural weight but increases tip stall risk.",
+  "Aspect Ratio": "Ratio of wingspan to mean chord. High aspect ratio wings (like gliders) minimize induced drag, while low aspect ratio wings are structurally stronger.",
+  "Incidence / Twist (deg)": "The angle difference between root and tip chord. Washout (negative twist) ensures the root stalls before the tip, preserving roll control.",
+  "X Location (Aft)": "Longitudinal position of the wing attachment point along the fuselage. Critical for balancing the Center of Gravity.",
+  "Z Location (Height)": "Vertical position of the wing attachment point.",
+  "Y Location (Lateral)": "Lateral displacement of the wing attachment point from the centerline.",
+
+  // Engine Parameters
+  "Engine Nacelle Length": "Length of the engine housing structure.",
+  "Engine Nacelle Diameter": "Maximum outer diameter of the engine nacelle, which scale propulsion weight.",
+  "Thrust per Engine (kN)": "Maximum static sea-level thrust output of the engine. Governs acceleration and climb performance.",
+  "Bypass Ratio (BPR)": "Ratio of bypass airflow to core airflow. High bypass ratio turbofans are highly fuel-efficient but limited in top speed.",
+  "Specific Fuel Consumption (SFC)": "Rate of fuel burn per unit thrust. Lower values improve range and endurance.",
+  "Propeller Diameter": "Diameter of the prop blades. Larger diameters sweep more air, improving efficiency but increasing blade tip speed.",
+  "Propeller Blades": "Number of blades. More blades absorb higher engine horsepower without increasing diameter.",
+
+  // General CAD
+  "X Location": "Position along the longitudinal axis (nose to tail).",
+  "Y Location": "Position along the lateral axis (left to right).",
+  "Z Location": "Position along the vertical axis (bottom to top).",
+  "Roll Angle (deg)": "Rotation angle about the longitudinal axis.",
+  "Pitch Angle (deg)": "Rotation angle about the lateral axis.",
+  "Yaw Angle (deg)": "Rotation angle about the vertical axis.",
+};
 
 /**
  * Reusable CAD Property Control with synchronized Slider + Editable Numeric Input Box
@@ -34,11 +88,22 @@ function PropertyRow({
   onChange: (val: number) => void;
 }) {
   const displayVal = value * unitFactor;
+  const tooltip = PARAMETER_TOOLTIPS[label];
 
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center text-slate-600 font-medium">
-        <span>{label} {unitLabel ? `(${unitLabel})` : ''}</span>
+        <span className="flex items-center gap-1.5 group relative cursor-help select-none">
+          <span>{label} {unitLabel ? `(${unitLabel})` : ''}</span>
+          {tooltip && (
+            <>
+              <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-sky-600 transition-colors" />
+              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-52 bg-slate-950/95 border border-slate-700/80 text-white text-[10px] p-2.5 rounded-lg shadow-2xl leading-normal z-50 font-sans normal-case tracking-normal font-normal">
+                {tooltip}
+              </div>
+            </>
+          )}
+        </span>
         <input
           type="number"
           step={step}

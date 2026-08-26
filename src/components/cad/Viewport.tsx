@@ -11,6 +11,7 @@ import { GridAxes } from './GridAxes';
 import { CoordinateAxesGizmo } from './CoordinateAxesGizmo';
 import { WindTunnelFlow } from './WindTunnelFlow';
 import { calculateAeroMetrics } from '@/engine/math/aeroMetrics';
+import { solveLLT } from '@/engine/math/engineeringTools';
 
 function CameraHandler({ view }: { view: CameraPresetView }) {
   const { camera, controls } = useThree() as any;
@@ -60,8 +61,15 @@ export function Viewport() {
   const flowSimulationActive = useUIStore((state) => state.flowSimulationActive);
   const flowColormapMode = useUIStore((state) => state.flowColormapMode);
   const flowVelocity = useUIStore((state) => state.flowVelocity);
-
+  const userAoA = useUIStore((state) => state.engineeringAoA) || 4.5;
+ 
+  const llt = useMemo(() => solveLLT(model, userAoA, flowVelocity), [model, userAoA, flowVelocity]);
   const aero = useMemo(() => calculateAeroMetrics(model, flowVelocity), [model, flowVelocity]);
+ 
+  const cL = llt.cL;
+  const cD0 = aero.referenceArea > 0 ? (aero.wettedArea * 0.0055) / aero.referenceArea : 0.02;
+  const cD = cD0 + llt.cDi;
+  const loD = cD > 0 ? cL / cD : 0;
 
   const getBackgroundColor = (theme: string) => {
     switch (theme) {
@@ -133,20 +141,20 @@ export function Viewport() {
 
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-sans">Lift Coeff (C_L):</span>
-              <span className="font-bold text-sky-300">{(aero.cL || 0).toFixed(3)}</span>
+              <span className="font-bold text-sky-300">{cL.toFixed(3)}</span>
             </div>
 
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-sans">Drag Coeff (C_D):</span>
-              <span className="font-bold text-rose-400">{(aero.cD || 0).toFixed(4)}</span>
+              <span className="font-bold text-rose-400">{cD.toFixed(4)}</span>
             </div>
 
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-sans">L/D Efficiency:</span>
               <span className={`font-bold ${
-                (aero.loD || 0) > 12 ? 'text-emerald-400' : (aero.loD || 0) > 8 ? 'text-amber-400' : 'text-rose-400'
+                loD > 12 ? 'text-emerald-400' : loD > 8 ? 'text-amber-400' : 'text-rose-400'
               }`}>
-                {(aero.loD || 0).toFixed(1)}
+                {loD.toFixed(1)}
               </span>
             </div>
 
@@ -162,7 +170,7 @@ export function Viewport() {
             </div>
 
             <div className="text-[8px] text-slate-500 leading-normal mt-1 border-t border-slate-800/40 pt-1.5 font-sans">
-              *Calculated at sea level density (1.225 kg/m³), nominal angle of attack α = 4.5°.
+              *Calculated at sea level density (1.225 kg/m³), real-time angle of attack α = {userAoA.toFixed(1)}°.
             </div>
           </div>
         </div>

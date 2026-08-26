@@ -308,10 +308,10 @@ export function TopToolbar() {
               <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
             {activeDropdown === 'tools' && (
-              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
+              <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-100">
                 <button
                   onClick={() => { openModal('sketcher'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-slate-800 font-medium"
                 >
                   <Sliders className="w-3.5 h-3.5 text-sky-600" /> 2D Cross-Section Sketcher
                 </button>
@@ -321,152 +321,25 @@ export function TopToolbar() {
                     setDatabaseTab('airfoils');
                     setActiveDropdown(null);
                   }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-slate-800 font-medium"
                 >
                   <Library className="w-3.5 h-3.5 text-emerald-600" /> NACA Airfoil Library
                 </button>
                 <button
                   onClick={() => { openModal('measurements'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-slate-800 font-medium"
                 >
-                  <Ruler className="w-3.5 h-3.5 text-amber-600" /> Aerodynamic Mass & CG Analysis
+                  <Ruler className="w-3.5 h-3.5 text-amber-600" /> Measurement Caliper & Ruler
                 </button>
 
-                <div className="my-1 border-t border-slate-200" />
+                <div className="my-1 border-t border-slate-100" />
 
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Aerospace Engineering</div>
-                <button
-                  onClick={() => { setEngineeringTab('atmosphere'); openModal('engineering'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
-                >
-                  <Cloud className="w-3.5 h-3.5 text-sky-600" /> Standard Atmosphere
-                </button>
-                <button
-                  onClick={() => { setEngineeringTab('stability'); openModal('engineering'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
-                >
-                  <Compass className="w-3.5 h-3.5 text-amber-600" /> Stability & Trim Analysis
-                </button>
-                <button
-                  onClick={() => { setEngineeringTab('aerodynamics'); openModal('engineering'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
-                >
-                  <LineChart className="w-3.5 h-3.5 text-emerald-600" /> Wing Aerodynamics (LLT)
-                </button>
                 <button
                   onClick={() => { setEngineeringTab('structures'); openModal('engineering'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-150 text-xs flex items-center gap-2 text-slate-800"
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-slate-800 font-medium"
                 >
                   <Hammer className="w-3.5 h-3.5 text-purple-600" /> Wing Spar Bending (FEA)
                 </button>
-
-                <div className="my-1 border-t border-slate-200" />
-
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">3D Analysis Views</div>
-                <button
-                  onClick={() => { setAnalysisMode('none'); setActiveDropdown(null); }}
-                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
-                    analysisMode === 'none' ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-slate-500 inline-block" /> CAD Shading (Default)
-                </button>
-                <button
-                  onClick={() => { setAnalysisMode('pressure'); setActiveDropdown(null); }}
-                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
-                    analysisMode === 'pressure' ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" /> Surface Pressure (Cp)
-                </button>
-                <button
-                  onClick={() => { setAnalysisMode('loading'); setActiveDropdown(null); }}
-                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
-                    analysisMode === 'loading' ? 'text-emerald-700 font-bold bg-emerald-50' : 'text-slate-800'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Aerodynamic Loading
-                </button>
-                <button
-                  onClick={() => { setAnalysisMode('mass'); setActiveDropdown(null); }}
-                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
-                    analysisMode === 'mass' ? 'text-amber-700 font-bold bg-amber-50' : 'text-slate-800'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Mass / Density Heatmap
-                </button>
-
-                <div className="my-1 border-t border-slate-200" />
-
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wind Tunnel CFD</div>
-                <button
-                  onClick={() => { toggleFlowSimulation(); setActiveDropdown(null); }}
-                  className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 ${
-                    flowSimulationActive ? 'text-sky-700 font-bold bg-sky-50' : 'text-slate-800'
-                  }`}
-                >
-                  <Wind className="w-3.5 h-3.5 text-sky-500" />
-                  {flowSimulationActive ? '⏹ Stop Wind Tunnel' : '▶ Start Wind Tunnel'}
-                </button>
-
-                {flowSimulationActive && (
-                  <>
-                    <div className="px-3 py-1.5 flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase w-10">Speed:</span>
-                      <input
-                        type="range"
-                        min="20"
-                        max="350"
-                        step="5"
-                        value={flowVelocity}
-                        onChange={(e) => setFlowVelocity(parseInt(e.target.value))}
-                        className="flex-1 accent-sky-600 cursor-pointer h-1"
-                      />
-                      <span className="text-sky-600 font-mono text-[10px] font-extrabold w-[42px] text-right">{flowVelocity}m/s</span>
-                    </div>
-
-                    <div className="px-3 py-1 flex items-center gap-1">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase w-10">Color:</span>
-                      <button
-                        onClick={() => setFlowColormapMode('velocity')}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                          flowColormapMode === 'velocity' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                        }`}
-                      >
-                        Velocity
-                      </button>
-                      <button
-                        onClick={() => setFlowColormapMode('pressure')}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition ${
-                          flowColormapMode === 'pressure' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                        }`}
-                      >
-                        Pressure
-                      </button>
-                    </div>
-
-                    <div className="px-3 py-1 flex items-center gap-3">
-                      <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 hover:text-slate-900 select-none">
-                        <input
-                          type="checkbox"
-                          checked={showFlowStreamlines}
-                          onChange={toggleFlowStreamlines}
-                          className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-3 h-3 cursor-pointer"
-                        />
-                        Streamlines
-                      </label>
-                      <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 hover:text-slate-900 select-none">
-                        <input
-                          type="checkbox"
-                          checked={showFlowParticles}
-                          onChange={toggleFlowParticles}
-                          className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 w-3 h-3 cursor-pointer"
-                        />
-                        Bubbles
-                      </label>
-                    </div>
-                  </>
-                )}
               </div>
             )}
           </div>

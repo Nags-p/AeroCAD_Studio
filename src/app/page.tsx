@@ -6,6 +6,19 @@ import { TopToolbar } from '@/components/ui/TopToolbar';
 import { LeftSidebar } from '@/components/ui/LeftSidebar';
 import { RightProperties } from '@/components/ui/RightProperties';
 import { BottomStatusBar } from '@/components/ui/BottomStatusBar';
+import {
+  WorkspaceNavbar,
+  AerodynamicsLeftPanel,
+  AerodynamicsRightPanel,
+  StabilityLeftPanel,
+  StabilityRightPanel,
+  PerformanceLeftPanel,
+  PerformanceRightPanel,
+  MassLeftPanel,
+  MassRightPanel,
+  GeometryLeftPanel,
+  GeometryRightPanel
+} from '@/components/ui/WorkspacePanels';
 import { ViewportControls } from '@/components/cad/ViewportControls';
 import { SketcherModal } from '@/components/ui/SketcherModal';
 import { PresetSelector } from '@/components/ui/PresetSelector';
@@ -39,6 +52,45 @@ export default function TurboDESiMAero() {
   const loadFiles = useFileStore((state) => state.loadFiles);
   const undo = useAircraftStore((state) => state.undo);
   const redo = useAircraftStore((state) => state.redo);
+  const activeWorkspace = useUIStore((state) => state.activeWorkspace) || 'design';
+
+  const renderLeftPanel = () => {
+    switch (activeWorkspace) {
+      case 'design':
+        return <LeftSidebar />;
+      case 'geometry':
+        return <GeometryLeftPanel />;
+      case 'aerodynamics':
+        return <AerodynamicsLeftPanel />;
+      case 'stability':
+        return <StabilityLeftPanel />;
+      case 'performance':
+        return <PerformanceLeftPanel />;
+      case 'mass':
+        return <MassLeftPanel />;
+      default:
+        return <LeftSidebar />;
+    }
+  };
+
+  const renderRightPanel = () => {
+    switch (activeWorkspace) {
+      case 'design':
+        return <RightProperties />;
+      case 'geometry':
+        return <GeometryRightPanel />;
+      case 'aerodynamics':
+        return <AerodynamicsRightPanel />;
+      case 'stability':
+        return <StabilityRightPanel />;
+      case 'performance':
+        return <PerformanceRightPanel />;
+      case 'mass':
+        return <MassRightPanel />;
+      default:
+        return <RightProperties />;
+    }
+  };
 
   useEffect(() => {
     loadFiles();
@@ -46,6 +98,24 @@ export default function TurboDESiMAero() {
 
   useEffect(() => {
     useUIStore.persist.rehydrate();
+  }, []);
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'TEXTAREA' ||
+          target.tagName === 'INPUT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => window.removeEventListener('contextmenu', handleContextMenu);
   }, []);
 
   useEffect(() => {
@@ -100,10 +170,13 @@ export default function TurboDESiMAero() {
       {/* Top Application Toolbar */}
       <TopToolbar />
 
+      {/* Workspace Navbar */}
+      <WorkspaceNavbar />
+
       {/* Main Workspace Layout */}
       <div className="flex-1 flex relative overflow-hidden">
-        {/* Left Scene Tree Sidebar */}
-        <LeftSidebar />
+        {/* Left Panel */}
+        {renderLeftPanel()}
 
         {/* Center 3D CAD Viewport */}
         <div className="flex-1 relative h-full">
@@ -111,8 +184,8 @@ export default function TurboDESiMAero() {
           <Viewport />
         </div>
 
-        {/* Right Property Inspector Panel */}
-        <RightProperties />
+        {/* Right Panel */}
+        {renderRightPanel()}
       </div>
 
       {/* Bottom Aero Status Bar */}

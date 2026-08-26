@@ -33,9 +33,18 @@ interface UIStoreState {
   currentView: 'dashboard' | 'editor';
   contextMenu: ContextMenuConfig;
   activeEngineeringTab: EngineeringTabType;
-  activeHelpTab: 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
+  activeHelpTab: 'about' | 'docs' | 'keys' | 'security' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
   activeDatabaseTab: 'materials' | 'airfoils' | 'sections' | 'payload';
   viewportTheme: 'studio' | 'dark' | 'white' | 'sky';
+  activeWorkspace: 'design' | 'geometry' | 'aerodynamics' | 'performance' | 'mass' | 'stability';
+  engineeringAltitude: number;
+  engineeringAoA: number;
+  engineeringFlowSpeed: number;
+  engineeringGLoad: number;
+  engineeringSparMatId: string;
+  performanceFuelMass: number;
+  performancePayloadMass: number;
+  performanceThrottle: number;
 
   setCameraView: (view: CameraPresetView) => void;
   setShadingMode: (mode: VisualShadingMode) => void;
@@ -65,9 +74,18 @@ interface UIStoreState {
   analysisMode: AnalysisModeType;
   setAnalysisMode: (mode: AnalysisModeType) => void;
   setEngineeringTab: (tab: EngineeringTabType) => void;
-  setHelpTab: (tab: 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms') => void;
+  setHelpTab: (tab: 'about' | 'docs' | 'keys' | 'security' | 'disclaimer' | 'eula' | 'privacy' | 'terms') => void;
   setDatabaseTab: (tab: 'materials' | 'airfoils' | 'sections' | 'payload') => void;
   setViewportTheme: (theme: 'studio' | 'dark' | 'white' | 'sky') => void;
+  setActiveWorkspace: (ws: 'design' | 'geometry' | 'aerodynamics' | 'performance' | 'mass' | 'stability') => void;
+  setEngineeringAltitude: (alt: number) => void;
+  setEngineeringAoA: (aoa: number) => void;
+  setEngineeringFlowSpeed: (speed: number) => void;
+  setEngineeringGLoad: (g: number) => void;
+  setEngineeringSparMatId: (id: string) => void;
+  setPerformanceFuelMass: (fuel: number) => void;
+  setPerformancePayloadMass: (payload: number) => void;
+  setPerformanceThrottle: (throttle: number) => void;
 }
 
 export const useUIStore = create<UIStoreState>()(
@@ -103,6 +121,15 @@ export const useUIStore = create<UIStoreState>()(
       activeHelpTab: 'about',
       activeDatabaseTab: 'materials',
       viewportTheme: 'studio',
+      activeWorkspace: 'design',
+      engineeringAltitude: 1500,
+      engineeringAoA: 4.5,
+      engineeringFlowSpeed: 60,
+      engineeringGLoad: 2.5,
+      engineeringSparMatId: 'aluminum',
+      performanceFuelMass: 1000,
+      performancePayloadMass: 500,
+      performanceThrottle: 85,
 
       setCameraView: (view) => set({ cameraView: view }),
       setShadingMode: (mode) => set({ shadingMode: mode }),
@@ -145,6 +172,27 @@ export const useUIStore = create<UIStoreState>()(
       setHelpTab: (tab) => set({ activeHelpTab: tab }),
       setDatabaseTab: (tab) => set({ activeDatabaseTab: tab }),
       setViewportTheme: (theme) => set({ viewportTheme: theme }),
+      setActiveWorkspace: (ws) => {
+        const updates: any = { activeWorkspace: ws };
+        if (ws === 'aerodynamics') {
+          updates.flowSimulationActive = true;
+          updates.analysisMode = 'none';
+        } else {
+          updates.flowSimulationActive = false;
+        }
+        if (ws === 'mass') {
+          updates.showCG = true;
+        }
+        set(updates);
+      },
+      setEngineeringAltitude: (alt) => set({ engineeringAltitude: alt }),
+      setEngineeringAoA: (aoa) => set({ engineeringAoA: aoa }),
+      setEngineeringFlowSpeed: (speed) => set({ engineeringFlowSpeed: speed }),
+      setEngineeringGLoad: (g) => set({ engineeringGLoad: g }),
+      setEngineeringSparMatId: (id) => set({ engineeringSparMatId: id }),
+      setPerformanceFuelMass: (fuel) => set({ performanceFuelMass: fuel }),
+      setPerformancePayloadMass: (payload) => set({ performancePayloadMass: payload }),
+      setPerformanceThrottle: (throttle) => set({ performanceThrottle: throttle }),
     }),
     {
       name: 'aerocad_ui_settings',
@@ -158,6 +206,15 @@ export const useUIStore = create<UIStoreState>()(
         tessellationQuality: state.tessellationQuality,
         shadingMode: state.shadingMode,
         viewportTheme: state.viewportTheme,
+        activeWorkspace: state.activeWorkspace,
+        engineeringAltitude: state.engineeringAltitude,
+        engineeringAoA: state.engineeringAoA,
+        engineeringFlowSpeed: state.engineeringFlowSpeed,
+        engineeringGLoad: state.engineeringGLoad,
+        engineeringSparMatId: state.engineeringSparMatId,
+        performanceFuelMass: state.performanceFuelMass,
+        performancePayloadMass: state.performancePayloadMass,
+        performanceThrottle: state.performanceThrottle,
       }),
       skipHydration: true,
     }

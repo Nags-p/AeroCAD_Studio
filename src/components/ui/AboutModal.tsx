@@ -9,10 +9,11 @@ import {
   EULA_CONTENT,
   PRIVACY_CONTENT,
   TERMS_CONTENT,
-  USERGUIDE_CONTENT
+  USERGUIDE_CONTENT,
+  SECURITY_CONTENT
 } from './docContent';
 
-type HelpTabType = 'about' | 'docs' | 'keys' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
+type HelpTabType = 'about' | 'docs' | 'keys' | 'security' | 'disclaimer' | 'eula' | 'privacy' | 'terms';
 
 function cleanContent(text: string): string {
   if (!text) return '';
@@ -160,6 +161,18 @@ export function AboutModal() {
               <span>Keyboard Keys</span>
             </button>
 
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold tracking-wide transition text-left border ${
+                activeTab === 'security'
+                  ? 'bg-sky-50 text-sky-800 border-sky-200 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent'
+              }`}
+            >
+              <Lock className="w-4 h-4 text-emerald-600" />
+              <span>Security & Storage</span>
+            </button>
+
             <div className="my-1 border-t border-slate-200" />
             <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold px-3 select-none">Legal & Safety</div>
 
@@ -267,6 +280,11 @@ export function AboutModal() {
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* TAB 3.5: SECURITY */}
+            {activeTab === 'security' && (
+              <MarkdownViewer content={SECURITY_CONTENT} />
             )}
 
             {/* TAB 4: DISCLAIMER */}

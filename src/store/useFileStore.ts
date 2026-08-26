@@ -40,7 +40,7 @@ interface FileStoreState {
   connectDrive: (accessToken: string) => Promise<void>;
   disconnectDrive: () => void;
   setDrivePassphrase: (passphrase: string) => Promise<void>;
-  syncWithDrive: () => Promise<void>;
+  syncWithDrive: (isManual?: boolean) => Promise<void>;
   uploadFileToDrive: (file: SavedFile) => Promise<string | null>;
   deleteFileFromDrive: (driveFileId: string) => Promise<void>;
   _mergeAndSync: (driveFiles: { id: string; name: string }[], token: string, passphrase: string) => Promise<void>;
@@ -138,6 +138,8 @@ async function decryptModel(encryptedJson: string, passphrase: string): Promise<
 
 // --- Zustand Store implementation ---
 
+let driveUploadTimeout: NodeJS.Timeout | null = null;
+
 export const useFileStore = create<FileStoreState>((set, get) => ({
   files: [],
   trashFiles: [],
@@ -205,7 +207,12 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     // Upload to drive if connected
     const activeFile = updatedFiles.find((f) => f.id === activeFileId);
     if (activeFile && get().driveAccessToken && get().drivePassphrase) {
-      get().uploadFileToDrive(activeFile);
+      if (driveUploadTimeout) {
+        clearTimeout(driveUploadTimeout);
+      }
+      driveUploadTimeout = setTimeout(() => {
+        get().uploadFileToDrive(activeFile);
+      }, 1500); // Debounce Google Drive uploads to prevent rate limiting
     }
   },
 
@@ -412,10 +419,17 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     }
   },
 
-  syncWithDrive: async () => {
+  syncWithDrive: async (isManual = false) => {
     const token = get().driveAccessToken;
     const passphrase = get().drivePassphrase;
-    if (!token || !passphrase) return;
+    if (!token) {
+      if (isManual) alert('Not connected to Google Drive. Please connect first.');
+      return;
+    }
+    if (!passphrase) {
+      if (isManual) alert('Cloud encryption passphrase is not set. Please set it using the key icon.');
+      return;
+    }
 
     set({ isSyncing: true });
 
@@ -427,15 +441,30 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       });
 
       if (!searchRes.ok) {
+        if (searchRes.status === 401) {
+          get().disconnectDrive();
+          alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+          return;
+        }
         // Fallback: try regular Drive search for backward compatibility with existing files
         const fallbackQuery = encodeURIComponent("name contains '.aerocad' and trashed = false");
         const fallbackRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${fallbackQuery}&fields=files(id,name)`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!fallbackRes.ok) throw new Error('Search failed on Google Drive');
+        if (!fallbackRes.ok) {
+          if (fallbackRes.status === 401) {
+            get().disconnectDrive();
+            alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+            return;
+          }
+          throw new Error('Search failed on Google Drive');
+        }
         const fallbackData = await fallbackRes.json();
         const driveFiles: { id: string; name: string }[] = fallbackData.files || [];
         await get()._mergeAndSync(driveFiles, token, passphrase);
+        if (isManual) {
+          alert('Google Drive sync completed successfully!');
+        }
         return;
       }
 
@@ -464,8 +493,14 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       }
 
       await get()._mergeAndSync(driveFiles, token, passphrase);
+      if (isManual) {
+        alert('Google Drive sync completed successfully!');
+      }
     } catch (e) {
       console.error('Error during Google Drive sync:', e);
+      if (isManual) {
+        alert('Google Drive sync failed. Please check your connection.');
+      }
     } finally {
       set({ isSyncing: false });
     }
@@ -473,6 +508,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
 
   _mergeAndSync: async (driveFiles: { id: string; name: string }[], token: string, passphrase: string) => {
     const deletedIds = get().deletedDriveIds;
+    const successfullyDecryptedIds = new Set<string>();
 
     // 2. Loop through all Google Drive files and download/merge them
     let updatedLocalFiles = [...get().files];
@@ -503,6 +539,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
 
         // Decrypt the file
         const decryptedModel = await decryptModel(encryptedText, passphrase);
+        successfullyDecryptedIds.add(dFile.id);
 
         const localIndex = updatedLocalFiles.findIndex((f) => f.name === cleanName);
 
@@ -530,16 +567,19 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       }
     }
 
-    // 3. Upload any local files that do NOT exist on Google Drive
+    // 3. Upload any local files that do NOT exist on Google Drive (or failed to decrypt/corrupt)
     for (let i = 0; i < updatedLocalFiles.length; i++) {
       const localFile = updatedLocalFiles[i];
       const cloudFile = driveFiles.find((df) => df.name.replace('.aerocad', '') === localFile.name);
 
-      if (cloudFile) {
+      if (cloudFile && successfullyDecryptedIds.has(cloudFile.id)) {
         // Keep drive file ID updated
         localFile.driveFileId = cloudFile.id;
       } else {
         // Encrypt and upload local file
+        if (cloudFile) {
+          localFile.driveFileId = cloudFile.id; // overwrite the empty/corrupt file
+        }
         const driveId = await get().uploadFileToDrive(localFile);
         if (driveId) {
           localFile.driveFileId = driveId;
@@ -574,6 +614,11 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
             body: encryptedJson,
           }
         );
+        if (updateRes.status === 401) {
+          get().disconnectDrive();
+          alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+          return null;
+        }
         if (updateRes.ok) return file.driveFileId;
       }
 
@@ -592,7 +637,13 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
         }),
       });
 
-      if (!createMetaRes.ok) throw new Error('Failed to create Drive metadata');
+      if (!createMetaRes.ok) {
+        if (createMetaRes.status === 401) {
+          get().disconnectDrive();
+          alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+        }
+        throw new Error('Failed to create Drive metadata');
+      }
       const metaData = await createMetaRes.json();
       const driveFileId = metaData.id;
 
@@ -608,6 +659,12 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
           body: encryptedJson,
         }
       );
+
+      if (uploadRes.status === 401) {
+        get().disconnectDrive();
+        alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+        return null;
+      }
 
       if (uploadRes.ok) {
         // Cache the file ID back in state
