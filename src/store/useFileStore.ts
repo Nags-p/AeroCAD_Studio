@@ -10,6 +10,8 @@ export interface SavedFile {
   lastModified: string;
   model: AircraftModel;
   driveFileId?: string; // Cache the google drive file id
+  driveModifiedTime?: string; // Cache the google drive modified time
+  isDirty?: boolean; // Track if there are local modifications not yet synced to Google Drive
 }
 
 interface FileStoreState {
@@ -41,9 +43,9 @@ interface FileStoreState {
   disconnectDrive: () => void;
   setDrivePassphrase: (passphrase: string) => Promise<void>;
   syncWithDrive: (isManual?: boolean) => Promise<void>;
-  uploadFileToDrive: (file: SavedFile) => Promise<string | null>;
+  uploadFileToDrive: (file: SavedFile, skipStoreUpdate?: boolean) => Promise<{ driveFileId: string; driveModifiedTime: string } | null>;
   deleteFileFromDrive: (driveFileId: string) => Promise<void>;
-  _mergeAndSync: (driveFiles: { id: string; name: string }[], token: string, passphrase: string) => Promise<void>;
+  _mergeAndSync: (driveFiles: { id: string; name: string; modifiedTime?: string }[], token: string, passphrase: string) => Promise<void>;
 }
 
 // --- Helper Functions for AES-GCM-256 Client-Side Encryption ---
@@ -197,7 +199,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
 
     const updatedFiles = files.map((file) =>
       file.id === activeFileId
-        ? { ...file, model: JSON.parse(JSON.stringify(model)), lastModified: new Date().toLocaleString() }
+        ? { ...file, model: JSON.parse(JSON.stringify(model)), lastModified: new Date().toLocaleString(), isDirty: true }
         : file
     );
 
@@ -226,6 +228,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       name,
       lastModified: new Date().toLocaleString(),
       model: newModel,
+      isDirty: true,
     };
 
     const updatedFiles = [newFile, ...get().files];
@@ -285,7 +288,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
   renameFile: (id, newName) => {
     const updatedFiles = get().files.map((file) =>
       file.id === id
-        ? { ...file, name: newName, lastModified: new Date().toLocaleString() }
+        ? { ...file, name: newName, lastModified: new Date().toLocaleString(), isDirty: true }
         : file
     );
     set({ files: updatedFiles });
@@ -313,6 +316,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     const restoredFile: SavedFile = {
       ...file,
       lastModified: new Date().toLocaleString(),
+      isDirty: true,
     };
     const updatedFiles = [restoredFile, ...get().files];
 
@@ -436,7 +440,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     try {
       // 1. Search files ending in '.aerocad' in appDataFolder (hidden from user's Drive)
       const query = encodeURIComponent("name contains '.aerocad'");
-      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name)`, {
+      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&spaces=appDataFolder&fields=files(id,name,modifiedTime)`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -448,7 +452,7 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
         }
         // Fallback: try regular Drive search for backward compatibility with existing files
         const fallbackQuery = encodeURIComponent("name contains '.aerocad' and trashed = false");
-        const fallbackRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${fallbackQuery}&fields=files(id,name)`, {
+        const fallbackRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${fallbackQuery}&fields=files(id,name,modifiedTime)`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!fallbackRes.ok) {
@@ -460,7 +464,27 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
           throw new Error('Search failed on Google Drive');
         }
         const fallbackData = await fallbackRes.json();
-        const driveFiles: { id: string; name: string }[] = fallbackData.files || [];
+        let driveFiles: { id: string; name: string; modifiedTime?: string }[] = fallbackData.files || [];
+        
+        // Deduplicate files by name, keeping only the newest modifiedTime and deleting duplicates in the background
+        const uniqueFallbackFiles: Record<string, { id: string; name: string; modifiedTime?: string }> = {};
+        for (const df of driveFiles) {
+          const existing = uniqueFallbackFiles[df.name];
+          if (!existing) {
+            uniqueFallbackFiles[df.name] = df;
+          } else {
+            const existingTime = existing.modifiedTime ? new Date(existing.modifiedTime).getTime() : 0;
+            const dfTime = df.modifiedTime ? new Date(df.modifiedTime).getTime() : 0;
+            if (dfTime > existingTime) {
+              get().deleteFileFromDrive(existing.id);
+              uniqueFallbackFiles[df.name] = df;
+            } else {
+              get().deleteFileFromDrive(df.id);
+            }
+          }
+        }
+        driveFiles = Object.values(uniqueFallbackFiles);
+
         await get()._mergeAndSync(driveFiles, token, passphrase);
         if (isManual) {
           alert('Google Drive sync completed successfully!');
@@ -469,17 +493,17 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       }
 
       const searchData = await searchRes.json();
-      let driveFiles: { id: string; name: string }[] = searchData.files || [];
+      let driveFiles: { id: string; name: string; modifiedTime?: string }[] = searchData.files || [];
 
       // Also check regular Drive for legacy files and migrate them
       try {
         const legacyQuery = encodeURIComponent("name contains '.aerocad' and trashed = false");
-        const legacyRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${legacyQuery}&fields=files(id,name)`, {
+        const legacyRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${legacyQuery}&fields=files(id,name,modifiedTime)`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (legacyRes.ok) {
           const legacyData = await legacyRes.json();
-          const legacyFiles: { id: string; name: string }[] = legacyData.files || [];
+          const legacyFiles: { id: string; name: string; modifiedTime?: string }[] = legacyData.files || [];
           // Include legacy files that aren't already in appDataFolder
           const appDataIds = new Set(driveFiles.map(f => f.name));
           for (const lf of legacyFiles) {
@@ -491,6 +515,25 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       } catch {
         // Legacy search is best-effort
       }
+
+      // Deduplicate files by name, keeping only the newest modifiedTime and deleting duplicates in the background
+      const uniqueFiles: Record<string, { id: string; name: string; modifiedTime?: string }> = {};
+      for (const df of driveFiles) {
+        const existing = uniqueFiles[df.name];
+        if (!existing) {
+          uniqueFiles[df.name] = df;
+        } else {
+          const existingTime = existing.modifiedTime ? new Date(existing.modifiedTime).getTime() : 0;
+          const dfTime = df.modifiedTime ? new Date(df.modifiedTime).getTime() : 0;
+          if (dfTime > existingTime) {
+            get().deleteFileFromDrive(existing.id);
+            uniqueFiles[df.name] = df;
+          } else {
+            get().deleteFileFromDrive(df.id);
+          }
+        }
+      }
+      driveFiles = Object.values(uniqueFiles);
 
       await get()._mergeAndSync(driveFiles, token, passphrase);
       if (isManual) {
@@ -506,18 +549,21 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
     }
   },
 
-  _mergeAndSync: async (driveFiles: { id: string; name: string }[], token: string, passphrase: string) => {
+  _mergeAndSync: async (driveFiles, token, passphrase) => {
     const deletedIds = get().deletedDriveIds;
     const successfullyDecryptedIds = new Set<string>();
 
-    // 2. Loop through all Google Drive files and download/merge them
+    // 2. Loop through all Google Drive files and download/merge them in parallel
     let updatedLocalFiles = [...get().files];
 
-    for (const dFile of driveFiles) {
+    console.log('[Sync] Starting _mergeAndSync. Drive files:', driveFiles.map(f => ({ id: f.id, name: f.name, time: f.modifiedTime })), 'Local files:', updatedLocalFiles.map(f => ({ id: f.id, name: f.name, dirty: f.isDirty, driveId: f.driveFileId, driveTime: f.driveModifiedTime })));
+
+    const downloadPromises = driveFiles.map(async (dFile) => {
       // Skip files that were explicitly deleted locally
       if (deletedIds.includes(dFile.id)) {
-        get().deleteFileFromDrive(dFile.id);
-        continue;
+        console.log(`[Sync] File ${dFile.name} (ID: ${dFile.id}) is in deleted list. Deleting from Drive.`);
+        await get().deleteFileFromDrive(dFile.id);
+        return { type: 'deleted', id: dFile.id };
       }
 
       const cleanName = dFile.name.replace('.aerocad', '');
@@ -525,8 +571,41 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
       // Also skip if the file name or driveFileId exists in trash
       const isInTrash = get().trashFiles.some((f) => f.name === cleanName || f.driveFileId === dFile.id);
       if (isInTrash) {
-        continue;
+        console.log(`[Sync] File ${cleanName} is in trash. Skipping.`);
+        return { type: 'trash', id: dFile.id };
       }
+
+      // Skip download if the local file is dirty (local edits are newer and need to be uploaded)
+      const localFile = get().files.find(
+        (f) => f.driveFileId === dFile.id || f.name === cleanName
+      );
+      
+      console.log(`[Sync] Examining ${cleanName}. Local found:`, !!localFile, 'isDirty:', localFile?.isDirty, 'localDriveTime:', localFile?.driveModifiedTime, 'cloudTime:', dFile.modifiedTime);
+
+      if (localFile && localFile.isDirty) {
+        console.log(`[Sync] Skipping download of ${cleanName} because local file is dirty.`);
+        return { type: 'skipped_local_dirty', id: dFile.id, localFile };
+      }
+
+      // Skip download if the file is already synced
+      let isTimeMatch = false;
+      if (localFile && localFile.driveModifiedTime && dFile.modifiedTime) {
+        const localT = new Date(localFile.driveModifiedTime).getTime();
+        const cloudT = new Date(dFile.modifiedTime).getTime();
+        isTimeMatch = Math.abs(localT - cloudT) < 5000;
+      }
+
+      if (
+        localFile &&
+        localFile.driveFileId === dFile.id &&
+        isTimeMatch
+      ) {
+        console.log(`[Sync] Skipping download of ${cleanName} because it is already in sync.`);
+        successfullyDecryptedIds.add(dFile.id);
+        return { type: 'skipped_in_sync', id: dFile.id, localFile };
+      }
+
+      console.log(`[Sync] Downloading and decrypting ${cleanName} (ID: ${dFile.id}) from cloud.`);
 
       try {
         // Download encrypted file contents
@@ -534,77 +613,143 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
           headers: { Authorization: `Bearer ${token}` },
         });
 
-        if (!fileRes.ok) continue;
+        if (!fileRes.ok) return { type: 'error', id: dFile.id };
         const encryptedText = await fileRes.text();
 
         // Decrypt the file
         const decryptedModel = await decryptModel(encryptedText, passphrase);
         successfullyDecryptedIds.add(dFile.id);
 
-        const localIndex = updatedLocalFiles.findIndex((f) => f.name === cleanName);
+        return {
+          type: 'downloaded',
+          id: dFile.id,
+          name: cleanName,
+          model: decryptedModel,
+          modifiedTime: dFile.modifiedTime,
+        };
+      } catch (decryptErr) {
+        console.warn(`Could not decrypt cloud file ${dFile.name}. Passphrase might differ.`, decryptErr);
+        return { type: 'decrypt_error', id: dFile.id };
+      }
+    });
+
+    const downloadResults = await Promise.all(downloadPromises);
+
+    for (const res of downloadResults) {
+      if (res.type === 'downloaded') {
+        const downloadRes = res as {
+          type: 'downloaded';
+          id: string;
+          name: string;
+          model: AircraftModel;
+          modifiedTime?: string;
+        };
+        const localIndex = updatedLocalFiles.findIndex((f) => f.name === downloadRes.name);
 
         if (localIndex >= 0) {
           // File already exists locally, update it and preserve driveFileId
           updatedLocalFiles[localIndex] = {
             ...updatedLocalFiles[localIndex],
-            model: decryptedModel,
-            driveFileId: dFile.id,
+            model: downloadRes.model,
+            driveFileId: downloadRes.id,
+            driveModifiedTime: downloadRes.modifiedTime,
+            isDirty: false,
             lastModified: new Date().toLocaleString(),
           };
         } else {
           // New file from cloud
           const newCloudFile: SavedFile = {
             id: `file-cloud-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            name: cleanName,
+            name: downloadRes.name,
             lastModified: new Date().toLocaleString(),
-            model: decryptedModel,
-            driveFileId: dFile.id,
+            model: downloadRes.model,
+            driveFileId: downloadRes.id,
+            driveModifiedTime: downloadRes.modifiedTime,
+            isDirty: false,
           };
           updatedLocalFiles.push(newCloudFile);
         }
-      } catch (decryptErr) {
-        console.warn(`Could not decrypt cloud file ${dFile.name}. Passphrase might differ.`, decryptErr);
+      } else if (res.type === 'skipped_in_sync') {
+        const skippedRes = res as {
+          type: 'skipped_in_sync';
+          id: string;
+          localFile: SavedFile;
+        };
+        const localIndex = updatedLocalFiles.findIndex((f) => f.id === skippedRes.localFile.id);
+        if (localIndex >= 0) {
+          updatedLocalFiles[localIndex] = {
+            ...updatedLocalFiles[localIndex],
+            driveFileId: skippedRes.id,
+            isDirty: false,
+          };
+        }
+      } else if (res.type === 'skipped_local_dirty') {
+        // Keep the local file as-is, do not overwrite with old cloud model
       }
     }
 
-    // 3. Upload any local files that do NOT exist on Google Drive (or failed to decrypt/corrupt)
-    for (let i = 0; i < updatedLocalFiles.length; i++) {
-      const localFile = updatedLocalFiles[i];
+    // 3. Upload any local files that do NOT exist on Google Drive, are dirty, or failed to decrypt/corrupt
+    const uploadPromises = updatedLocalFiles.map(async (localFile) => {
       const cloudFile = driveFiles.find((df) => df.name.replace('.aerocad', '') === localFile.name);
+      const needsUpload =
+        !localFile.driveFileId ||
+        localFile.isDirty ||
+        (cloudFile && !successfullyDecryptedIds.has(cloudFile.id));
 
-      if (cloudFile && successfullyDecryptedIds.has(cloudFile.id)) {
-        // Keep drive file ID updated
-        localFile.driveFileId = cloudFile.id;
-      } else {
-        // Encrypt and upload local file
+      console.log(`[Sync] Checking upload for ${localFile.name}. needsUpload:`, needsUpload, 'isDirty:', localFile.isDirty, 'driveFileId:', localFile.driveFileId, 'cloudDecryptSuccess:', cloudFile ? successfullyDecryptedIds.has(cloudFile.id) : 'no_cloud_file');
+
+      if (needsUpload) {
         if (cloudFile) {
           localFile.driveFileId = cloudFile.id; // overwrite the empty/corrupt file
         }
-        const driveId = await get().uploadFileToDrive(localFile);
-        if (driveId) {
-          localFile.driveFileId = driveId;
+        const uploadRes = await get().uploadFileToDrive(localFile, true);
+        if (uploadRes) {
+          console.log(`[Sync] Uploaded ${localFile.name} successfully. driveFileId: ${uploadRes.driveFileId}, driveModifiedTime: ${uploadRes.driveModifiedTime}`);
+          return {
+            ...localFile,
+            driveFileId: uploadRes.driveFileId,
+            driveModifiedTime: uploadRes.driveModifiedTime,
+            isDirty: false,
+          };
+        } else {
+          console.log(`[Sync] Upload failed for ${localFile.name}`);
+        }
+      } else {
+        if (cloudFile && successfullyDecryptedIds.has(cloudFile.id)) {
+          return {
+            ...localFile,
+            driveFileId: cloudFile.id,
+          };
         }
       }
-    }
+      return localFile;
+    });
+
+    updatedLocalFiles = await Promise.all(uploadPromises);
 
     // 4. Save merged list to store & localStorage
     set({ files: updatedLocalFiles });
     localStorage.setItem('aerocad_files', JSON.stringify(updatedLocalFiles));
   },
 
-  uploadFileToDrive: async (file) => {
+  uploadFileToDrive: async (file, skipStoreUpdate = false) => {
     const token = get().driveAccessToken;
     const passphrase = get().drivePassphrase;
     if (!token || !passphrase) return null;
+
+    console.log(`[Sync] Starting uploadFileToDrive for: ${file.name}. skipStoreUpdate:`, skipStoreUpdate, 'driveFileId:', file.driveFileId, 'modelName:', file.model.name);
 
     try {
       const encryptedJson = await encryptModel(file.model, passphrase);
       const fileName = `${file.name}.aerocad`;
 
-      if (file.driveFileId) {
+      let driveFileId = file.driveFileId;
+      let driveModifiedTime: string | undefined;
+
+      if (driveFileId) {
         // OVERWRITE existing file content
         const updateRes = await fetch(
-          `https://www.googleapis.com/upload/drive/v3/files/${file.driveFileId}?uploadType=media`,
+          `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
           {
             method: 'PATCH',
             headers: {
@@ -619,60 +764,99 @@ export const useFileStore = create<FileStoreState>((set, get) => ({
           alert('Your Google Drive session has expired. Please connect to Google Drive again.');
           return null;
         }
-        if (updateRes.ok) return file.driveFileId;
-      }
-
-      // CREATE a new file on Google Drive (hidden in appDataFolder)
-      // Step A: Create file metadata in appDataFolder so it's hidden from user's Drive
-      const createMetaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: fileName,
-          mimeType: 'application/json',
-          parents: ['appDataFolder'],
-        }),
-      });
-
-      if (!createMetaRes.ok) {
-        if (createMetaRes.status === 401) {
-          get().disconnectDrive();
-          alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+        if (updateRes.ok) {
+          // Fetch the updated modifiedTime from Google Drive metadata
+          const metaRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id,modifiedTime`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (metaRes.ok) {
+            const data = await metaRes.json();
+            driveModifiedTime = data.modifiedTime;
+          } else {
+            driveModifiedTime = new Date().toISOString();
+          }
+        } else {
+          throw new Error('Failed to update file content on Drive');
         }
-        throw new Error('Failed to create Drive metadata');
-      }
-      const metaData = await createMetaRes.json();
-      const driveFileId = metaData.id;
-
-      // Step B: Upload file content
-      const uploadRes = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
-        {
-          method: 'PATCH',
+      } else {
+        // CREATE a new file on Google Drive (hidden in appDataFolder)
+        // Step A: Create file metadata in appDataFolder so it's hidden from user's Drive
+        const createMetaRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+          method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: encryptedJson,
-        }
-      );
+          body: JSON.stringify({
+            name: fileName,
+            mimeType: 'application/json',
+            parents: ['appDataFolder'],
+          }),
+        });
 
-      if (uploadRes.status === 401) {
-        get().disconnectDrive();
-        alert('Your Google Drive session has expired. Please connect to Google Drive again.');
-        return null;
+        if (!createMetaRes.ok) {
+          if (createMetaRes.status === 401) {
+            get().disconnectDrive();
+            alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+          }
+          throw new Error('Failed to create Drive metadata');
+        }
+        const metaData = await createMetaRes.json();
+        driveFileId = metaData.id;
+
+        // Step B: Upload file content
+        const uploadRes = await fetch(
+          `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+          {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: encryptedJson,
+          }
+        );
+
+        if (uploadRes.status === 401) {
+          get().disconnectDrive();
+          alert('Your Google Drive session has expired. Please connect to Google Drive again.');
+          return null;
+        }
+
+        if (uploadRes.ok) {
+          // Fetch the updated modifiedTime from Google Drive metadata
+          const metaRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id,modifiedTime`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          if (metaRes.ok) {
+            const data = await metaRes.json();
+            driveModifiedTime = data.modifiedTime;
+          } else {
+            driveModifiedTime = new Date().toISOString();
+          }
+        } else {
+          throw new Error('Failed to upload file content to Drive');
+        }
       }
 
-      if (uploadRes.ok) {
-        // Cache the file ID back in state
-        set((state) => ({
-          files: state.files.map((f) => (f.id === file.id ? { ...f, driveFileId } : f)),
-        }));
-        localStorage.setItem('aerocad_files', JSON.stringify(get().files));
-        return driveFileId;
+      if (driveFileId && driveModifiedTime) {
+        if (!skipStoreUpdate) {
+          set((state) => ({
+            files: state.files.map((f) =>
+              f.id === file.id
+                ? { ...f, driveFileId, driveModifiedTime, isDirty: false }
+                : f
+            ),
+          }));
+          localStorage.setItem('aerocad_files', JSON.stringify(get().files));
+        }
+        return { driveFileId, driveModifiedTime };
       }
     } catch (e) {
       console.error(`Failed to upload ${file.name} to Drive:`, e);

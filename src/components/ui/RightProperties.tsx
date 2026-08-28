@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move, HelpCircle } from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move, HelpCircle, Maximize2, X, Plus } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
 import { BUILTIN_AIRFOILS } from '@/engine/math/naca';
@@ -371,6 +371,865 @@ function Station2DSketchCanvas({
   );
 }
 
+interface SideProfileSketchCanvasProps {
+  fuselage: any;
+  onChangeSection: (id: string, params: any) => void;
+  onChangeFuselage: (params: any) => void;
+}
+
+interface CanvasPoint {
+  id: string;
+  x: number;
+  y: number;
+  top: number;
+  bot: number;
+}
+
+function SideProfileSketchCanvas({
+  fuselage,
+  onChangeSection,
+  onChangeFuselage,
+}: SideProfileSketchCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [activeView, setActiveView] = useState<'side' | 'top'>('side');
+  const [syncDimensions, setSyncDimensions] = useState<boolean>(true);
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(true);
+  const [isDragging, setIsDragging] = useState<{ type: 'center' | 'top' | 'nose' | 'tail' | 'tail-top'; secId: string } | null>(null);
+  const [cursorStyle, setCursorStyle] = useState<string>('default');
+
+  const selectedId = useAircraftStore((state) => state.selectedId);
+  const selectedType = useAircraftStore((state) => state.selectedType);
+  const setSelected = useAircraftStore((state) => state.setSelected);
+
+  const snap = (val: number, step: number): number => {
+    return Math.round(val / step) * step;
+  };
+
+  const resolved = useMemo((): FuselageSection[] => {
+    return [...fuselage.sections].sort((a: FuselageSection, b: FuselageSection) => a.xPos - b.xPos);
+  }, [fuselage.sections]);
+
+  const handleAddSection = () => {
+    if (resolved.length < 2) return;
+    
+    // Find the largest gap between adjacent stations
+    let maxGap = 0;
+    let insertIndex = 0;
+    for (let i = 0; i < resolved.length - 1; i++) {
+      const gap = resolved[i+1].xPos - resolved[i].xPos;
+      if (gap > maxGap) {
+        maxGap = gap;
+        insertIndex = i;
+      }
+    }
+
+    const sA = resolved[insertIndex];
+    const sB = resolved[insertIndex + 1];
+    const newX = parseFloat(((sA.xPos + sB.xPos) / 2).toFixed(3));
+    
+    // Interpolate dimensions and offsets
+    const newWidth = parseFloat(((sA.width + sB.width) / 2).toFixed(2));
+    const newHeight = parseFloat(((sA.height + sB.height) / 2).toFixed(2));
+    const newZ = parseFloat(((sA.zOffset + sB.zOffset) / 2).toFixed(2));
+    const newY = parseFloat(((sA.yOffset + sB.yOffset) / 2).toFixed(2));
+
+    const newSec: FuselageSection = {
+      id: `sec-${Date.now()}`,
+      name: `Cabin Station ${fuselage.sections.length + 1}`,
+      xPos: newX,
+      width: newWidth,
+      height: newHeight,
+      shapeType: sA.shapeType,
+      nExp: sA.nExp || 2.0,
+      mExp: sA.mExp || sA.nExp || 2.0,
+      cornerRadius: sA.cornerRadius || 0.3,
+      zOffset: newZ,
+      yOffset: newY
+    };
+
+    const newSections = [...fuselage.sections, newSec];
+    onChangeFuselage({ sections: newSections });
+    
+    // Select the new section
+    setTimeout(() => {
+      setSelected(newSec.id, 'section');
+    }, 50);
+  };
+
+  const handleDeleteSelected = () => {
+    if (resolved.length <= 2) return; // Keep at least cockpit and tail cone
+    if (selectedType !== 'section' || !selectedId) return;
+
+    const updatedSections = fuselage.sections.filter((s: FuselageSection) => s.id !== selectedId);
+    onChangeFuselage({ sections: updatedSections });
+    setSelected(null, null);
+  };
+
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
+  const W = isExpanded ? 840 : 270;
+  const H = isExpanded ? 460 : 160;
+  const padX = isExpanded ? 40 : 25;
+  const padY = isExpanded ? 30 : 25;
+  const pw = W - 2 * padX;
+  const ph = H - 2 * padY;
+  const cy = H / 2;
+  const scaleZ = isExpanded ? 63 : 22;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    
+    // Premium dark-mode CAD background
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = true;
+
+    // Subtle CAD vertical grid lines at 10% increments (length alignment)
+    for (let pct = 1; pct <= 9; pct++) {
+      const t = pct / 10;
+      const x = padX + t * pw;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      if (pct === 5) {
+        ctx.strokeStyle = 'rgba(51, 65, 85, 0.4)'; // Prominent 50% line
+        ctx.lineWidth = 1.2;
+      } else {
+        ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
+        ctx.lineWidth = 0.8;
+      }
+      ctx.stroke();
+    }
+    
+    // Subtle CAD horizontal grid lines at physical offsets (-2m, -1m, 1m, 2m)
+    for (let dy = -2; dy <= 2; dy++) {
+      if (dy === 0) continue; // reference centerline is drawn separately
+      const y = cy - dy * scaleZ;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // Reference centerline axis
+    ctx.strokeStyle = 'rgba(71, 85, 105, 0.4)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padX, cy);
+    ctx.lineTo(W - padX, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (resolved.length < 2) {
+      ctx.restore();
+      return;
+    }
+
+    const noseZ = fuselage.noseZ || 0.0;
+    const noseY = fuselage.noseY || 0.0;
+    const tailZ = fuselage.tailZ || 0.0;
+    const tailY = fuselage.tailY || 0.0;
+    const S = fuselage.noseRoundness !== undefined ? fuselage.noseRoundness : 0.75;
+    const tailScale = fuselage.tail !== undefined ? fuselage.tail : 0.3;
+
+    const s0 = resolved[0];
+    const s1 = resolved.find((s: FuselageSection) => s.xPos > 0) || resolved[1] || s0;
+    const sLast = resolved[resolved.length - 1];
+
+    const t1 = Math.max(0.02, s1.xPos);
+    const tEnd = sLast.xPos;
+
+    // High-resolution math profile evaluator
+    const getProfileAt = (t: number) => {
+      let rx = 0;
+      let ry = 0;
+
+      // 1. Radius interpolation matching generator math exactly
+      if (t <= t1) {
+        const ratio = Math.max(0, Math.min(1.0, t / t1));
+        let blend = 0;
+        if (S <= 1.0) {
+          const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
+          blend = S * domeCurve + (1.0 - S) * ratio;
+        } else {
+          blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S)));
+        }
+        rx = (s1.width / 2) * blend;
+        ry = (s1.height / 2) * blend;
+      } else if (t >= tEnd && tEnd < 0.99) {
+        const denom = 1.0 - tEnd;
+        const ratio = Math.max(0, Math.min(1.0, (t - tEnd) / denom));
+        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+        const scaleFactor = 1.0 - (1.0 - tailScale) * blend;
+        rx = (sLast.width / 2) * scaleFactor;
+        ry = (sLast.height / 2) * scaleFactor;
+      } else {
+        let idx = 0;
+        for (let i = 0; i < resolved.length - 1; i++) {
+          if (t >= resolved[i].xPos && t <= resolved[i + 1].xPos) {
+            idx = i;
+            break;
+          }
+        }
+        const sA = resolved[idx];
+        const sB = resolved[idx + 1];
+        const denom = sB.xPos - sA.xPos;
+        const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (t - sA.xPos) / denom)) : 0.0;
+        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+
+        rx = (sA.width / 2) * (1.0 - blend) + (sB.width / 2) * blend;
+        ry = (sA.height / 2) * (1.0 - blend) + (sB.height / 2) * blend;
+      }
+
+      rx = Math.max(0.0001, rx);
+      ry = Math.max(0.0001, ry);
+
+      // 2. Spatial shift interpolation
+      let offsetZ = 0;
+      let offsetY = 0;
+
+      if (t <= t1) {
+        const ratio = Math.max(0, Math.min(1.0, t / t1));
+        let blend = 0;
+        if (S <= 1.0) {
+          const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
+          blend = S * domeCurve + (1.0 - S) * ratio;
+        } else {
+          blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S)));
+        }
+        offsetZ = noseZ + (s1.zOffset - noseZ) * blend;
+        offsetY = noseY + (s1.yOffset - noseY) * blend;
+      } else if (t >= tEnd) {
+        const tailDenom = 1.0 - tEnd;
+        if (tailDenom > 0.01) {
+          const ratio = Math.max(0, Math.min(1.0, (t - tEnd) / tailDenom));
+          const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+          offsetZ = sLast.zOffset + (tailZ - sLast.zOffset) * blend;
+          offsetY = sLast.yOffset + (tailY - sLast.yOffset) * blend;
+        } else {
+          offsetZ = sLast.zOffset;
+          offsetY = sLast.yOffset;
+        }
+      } else {
+        let idx = 0;
+        for (let i = 0; i < resolved.length - 1; i++) {
+          if (t >= resolved[i].xPos && t <= resolved[i + 1].xPos) {
+            idx = i;
+            break;
+          }
+        }
+        const sA = resolved[idx];
+        const sB = resolved[idx + 1];
+        const denom = sB.xPos - sA.xPos;
+        const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (t - sA.xPos) / denom)) : 0.0;
+        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+        offsetZ = sA.zOffset * (1.0 - blend) + sB.zOffset * blend;
+        offsetY = sA.yOffset * (1.0 - blend) + sB.yOffset * blend;
+      }
+
+      return { rx, ry, offsetZ, offsetY };
+    };
+
+    // Evaluate 150 points along length for high-resolution spline drawing
+    const curvePointsCount = 150;
+    const topPathPoints: { x: number; y: number }[] = [];
+    const botPathPoints: { x: number; y: number }[] = [];
+    const centerPathPoints: { x: number; y: number }[] = [];
+
+    for (let k = 0; k <= curvePointsCount; k++) {
+      const t = k / curvePointsCount;
+      const x_pt = padX + t * pw;
+      const profile = getProfileAt(t);
+
+      const offsetVal = activeView === 'side' ? profile.offsetZ : profile.offsetY;
+      const dimVal = activeView === 'side' ? profile.ry : profile.rx;
+
+      const cy_pt = cy - offsetVal * scaleZ;
+      const top_pt = cy - (offsetVal + dimVal) * scaleZ;
+      const bot_pt = cy - (offsetVal - dimVal) * scaleZ;
+
+      topPathPoints.push({ x: x_pt, y: top_pt });
+      botPathPoints.push({ x: x_pt, y: bot_pt });
+      centerPathPoints.push({ x: x_pt, y: cy_pt });
+    }
+
+    // Render filled body silhouette (semi-transparent glow)
+    ctx.fillStyle = activeView === 'side' ? 'rgba(56, 189, 248, 0.06)' : 'rgba(52, 211, 153, 0.06)';
+    ctx.beginPath();
+    ctx.moveTo(topPathPoints[0].x, topPathPoints[0].y);
+    for (let i = 1; i < topPathPoints.length; i++) ctx.lineTo(topPathPoints[i].x, topPathPoints[i].y);
+    for (let i = botPathPoints.length - 1; i >= 0; i--) ctx.lineTo(botPathPoints[i].x, botPathPoints[i].y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw Top/Left glowing profile curve
+    ctx.strokeStyle = activeView === 'side' ? '#38BDF8' : '#34D399';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(topPathPoints[0].x, topPathPoints[0].y);
+    for (let i = 1; i < topPathPoints.length; i++) ctx.lineTo(topPathPoints[i].x, topPathPoints[i].y);
+    ctx.stroke();
+
+    // Draw Bottom/Right glowing profile curve
+    ctx.beginPath();
+    ctx.moveTo(botPathPoints[0].x, botPathPoints[0].y);
+    for (let i = 1; i < botPathPoints.length; i++) ctx.lineTo(botPathPoints[i].x, botPathPoints[i].y);
+    ctx.stroke();
+
+    // Draw Centerline spline
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(centerPathPoints[0].x, centerPathPoints[0].y);
+    for (let i = 1; i < centerPathPoints.length; i++) ctx.lineTo(centerPathPoints[i].x, centerPathPoints[i].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Coordinates of stations for handles and bulkheads
+    const pts = resolved.map((sec: FuselageSection): CanvasPoint => {
+      const cx_pt = padX + sec.xPos * pw;
+      const offsetVal = activeView === 'side' ? sec.zOffset : sec.yOffset;
+      const dimensionVal = activeView === 'side' ? sec.height : sec.width;
+      
+      const cy_pt = cy - offsetVal * scaleZ;
+      const top_pt = cy - (offsetVal + dimensionVal / 2) * scaleZ;
+      const bot_pt = cy - (offsetVal - dimensionVal / 2) * scaleZ;
+      return { id: sec.id, x: cx_pt, y: cy_pt, top: top_pt, bot: bot_pt };
+    });
+
+    // Draw station structural bulkheads
+    pts.forEach((pt: CanvasPoint) => {
+      const isSelected = selectedType === 'section' && selectedId === pt.id;
+      ctx.strokeStyle = isSelected ? 'rgba(34, 211, 238, 0.7)' : 'rgba(226, 232, 240, 0.15)';
+      ctx.lineWidth = isSelected ? 1.8 : 1.2;
+      ctx.beginPath();
+      ctx.moveTo(pt.x, pt.top);
+      ctx.lineTo(pt.x, pt.bot);
+      ctx.stroke();
+    });
+
+    // Draw structural station handles
+    pts.forEach((pt: CanvasPoint) => {
+      const isSelected = selectedType === 'section' && selectedId === pt.id;
+
+      // Center handle (Centerline droop/offset and placement)
+      ctx.fillStyle = '#22D3EE';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Outer selection ring for center handle
+      if (isSelected) {
+        ctx.strokeStyle = '#22D3EE';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Top handle (Height/Width control) - Only render if not the nose tip station (xPos > 0.01)
+      const secObj = resolved.find((s: FuselageSection) => s.id === pt.id);
+      if (secObj && secObj.xPos > 0.01) {
+        ctx.fillStyle = '#FB923C';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.top, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Outer selection ring for top handle
+        if (isSelected) {
+          ctx.strokeStyle = '#FB923C';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.top, 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    });
+
+    // Draw single point handle at nose apex (x = 0)
+    const noseOffset = activeView === 'side' ? (fuselage.noseZ || 0) : (fuselage.noseY || 0);
+    const noseY_pt = cy - noseOffset * scaleZ;
+    ctx.fillStyle = '#22D3EE';
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(padX, noseY_pt, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw single point handle at tail tip apex (x = W - padX) - Only render if the last station is not already at the end
+    if (tEnd < 0.99) {
+      const tailOffset = activeView === 'side' ? (fuselage.tailZ || 0) : (fuselage.tailY || 0);
+      const tailY_pt = cy - tailOffset * scaleZ;
+      ctx.fillStyle = '#22D3EE';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(W - padX, tailY_pt, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Tail tip orange handle (Tail scale)
+      const tailScale = fuselage.tail || 0.3;
+      const sLast = resolved[resolved.length - 1];
+      const tailDim = activeView === 'side' ? sLast.height : sLast.width;
+      const tailTop_pt = tailY_pt - (tailDim / 2) * tailScale * scaleZ;
+
+      ctx.fillStyle = '#FB923C';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(W - padX, tailTop_pt, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }, [fuselage, resolved, activeView, isExpanded]);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const tEnd = resolved.length > 0 ? resolved[resolved.length - 1].xPos : 1.0;
+
+    // Nose apex check
+    const noseOffset = activeView === 'side' ? (fuselage.noseZ || 0) : (fuselage.noseY || 0);
+    const noseY_pt = cy - noseOffset * scaleZ;
+    if (Math.hypot(mx - padX, my - noseY_pt) < 10) {
+      setIsDragging({ type: 'nose', secId: 'nose-apex' });
+      return;
+    }
+
+    // Tail tip check - Only check if not already handled by a station at the end
+    if (tEnd < 0.99) {
+      const tailOffset = activeView === 'side' ? (fuselage.tailZ || 0) : (fuselage.tailY || 0);
+      const tailY_pt = cy - tailOffset * scaleZ;
+      if (Math.hypot(mx - (W - padX), my - tailY_pt) < 10) {
+        setIsDragging({ type: 'tail', secId: 'tail-apex' });
+        return;
+      }
+
+      // Tail tip top handle (Tail scale)
+      const tailScale = fuselage.tail || 0.3;
+      const sLast = resolved[resolved.length - 1];
+      const tailDim = activeView === 'side' ? sLast.height : sLast.width;
+      const tailTop_pt = tailY_pt - (tailDim / 2) * tailScale * scaleZ;
+      if (Math.hypot(mx - (W - padX), my - tailTop_pt) < 10) {
+        setIsDragging({ type: 'tail-top', secId: 'tail-apex-top' });
+        return;
+      }
+    }
+
+    for (const sec of resolved) {
+      const cx_pt = padX + sec.xPos * pw;
+      const offsetVal = activeView === 'side' ? sec.zOffset : sec.yOffset;
+      const dimensionVal = activeView === 'side' ? sec.height : sec.width;
+      
+      const cy_pt = cy - offsetVal * scaleZ;
+      const top_pt = cy - (offsetVal + dimensionVal / 2) * scaleZ;
+
+      if (Math.hypot(mx - cx_pt, my - cy_pt) < 10) {
+        setSelected(sec.id, 'section');
+        setIsDragging({ type: 'center', secId: sec.id });
+        return;
+      }
+
+      if (sec.xPos > 0.01 && Math.hypot(mx - cx_pt, my - top_pt) < 10) {
+        setSelected(sec.id, 'section');
+        setIsDragging({ type: 'top', secId: sec.id });
+        return;
+      }
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const tEnd = resolved.length > 0 ? resolved[resolved.length - 1].xPos : 1.0;
+
+    if (isDragging) {
+      let valOffset = (cy - my) / scaleZ;
+      if (snapToGrid) {
+        if (Math.abs(valOffset) < 0.08) {
+          valOffset = 0.0;
+        } else {
+          valOffset = snap(valOffset, 0.05);
+        }
+      }
+
+      if (isDragging.type === 'nose') {
+        if (activeView === 'side') {
+          onChangeFuselage({ noseZ: parseFloat(valOffset.toFixed(2)) });
+        } else {
+          onChangeFuselage({ noseY: parseFloat(valOffset.toFixed(2)) });
+        }
+        return;
+      }
+
+      if (isDragging.type === 'tail') {
+        if (activeView === 'side') {
+          onChangeFuselage({ tailZ: parseFloat(valOffset.toFixed(2)) });
+        } else {
+          onChangeFuselage({ tailY: parseFloat(valOffset.toFixed(2)) });
+        }
+        return;
+      }
+
+      if (isDragging.type === 'tail-top') {
+        const tailOffset = activeView === 'side' ? (fuselage.tailZ || 0) : (fuselage.tailY || 0);
+        let targetTopVal = (cy - my) / scaleZ;
+        if (snapToGrid) {
+          targetTopVal = snap(targetTopVal, 0.05);
+        }
+        const newRadius = targetTopVal - tailOffset;
+        const sLast = resolved[resolved.length - 1];
+        const tailDim = activeView === 'side' ? sLast.height : sLast.width;
+        const targetRadius = Math.max(0.1, tailDim / 2);
+        
+        const newTailScale = Math.max(0.01, Math.min(2.0, newRadius / targetRadius));
+        onChangeFuselage({ tail: parseFloat(newTailScale.toFixed(3)) });
+        return;
+      }
+
+      const sec = resolved.find((s: FuselageSection) => s.id === isDragging.secId);
+      if (!sec) return;
+
+      let newXPos = Math.max(0.0, Math.min(1.0, (mx - padX) / pw));
+      if (snapToGrid) {
+        newXPos = snap(newXPos, 0.05);
+      }
+
+      if (isDragging.type === 'center') {
+        const isBoundary = sec.xPos < 0.001 || sec.xPos > 0.999;
+        if (activeView === 'side') {
+          onChangeSection(sec.id, {
+            xPos: isBoundary ? sec.xPos : parseFloat(newXPos.toFixed(3)),
+            zOffset: parseFloat(valOffset.toFixed(2)),
+          });
+        } else {
+          onChangeSection(sec.id, {
+            xPos: isBoundary ? sec.xPos : parseFloat(newXPos.toFixed(3)),
+            yOffset: parseFloat(valOffset.toFixed(2)),
+          });
+        }
+      } else if (isDragging.type === 'top') {
+        const secOffset = activeView === 'side' ? sec.zOffset : sec.yOffset;
+        let targetTopVal = (cy - my) / scaleZ;
+        if (snapToGrid) {
+          targetTopVal = snap(targetTopVal, 0.05); // snap top outline position directly to grid lines
+        }
+        const newRadius = targetTopVal - secOffset;
+        let newDim = Math.max(0.1, newRadius * 2);
+        
+        if (syncDimensions) {
+          onChangeSection(sec.id, {
+            height: parseFloat(newDim.toFixed(2)),
+            width: parseFloat(newDim.toFixed(2)),
+          });
+        } else {
+          if (activeView === 'side') {
+            onChangeSection(sec.id, { height: parseFloat(newDim.toFixed(2)) });
+          } else {
+            onChangeSection(sec.id, { width: parseFloat(newDim.toFixed(2)) });
+          }
+        }
+      }
+      return;
+    }
+
+    let found = false;
+
+    // Nose check
+    const noseOffset = activeView === 'side' ? (fuselage.noseZ || 0) : (fuselage.noseY || 0);
+    const noseY_pt = cy - noseOffset * scaleZ;
+    if (Math.hypot(mx - padX, my - noseY_pt) < 10) {
+      setCursorStyle('move');
+      found = true;
+    }
+
+    // Tail check
+    if (tEnd < 0.99) {
+      const tailOffset = activeView === 'side' ? (fuselage.tailZ || 0) : (fuselage.tailY || 0);
+      const tailY_pt = cy - tailOffset * scaleZ;
+      if (!found && Math.hypot(mx - (W - padX), my - tailY_pt) < 10) {
+        setCursorStyle('move');
+        found = true;
+      }
+
+      // Tail tip top handle check (Tail scale)
+      const tailScale = fuselage.tail || 0.3;
+      const sLast = resolved[resolved.length - 1];
+      const tailDim = activeView === 'side' ? sLast.height : sLast.width;
+      const tailTop_pt = tailY_pt - (tailDim / 2) * tailScale * scaleZ;
+      if (!found && Math.hypot(mx - (W - padX), my - tailTop_pt) < 10) {
+        setCursorStyle('ns-resize');
+        found = true;
+      }
+    }
+
+    if (!found) {
+      for (const sec of resolved) {
+        const cx_pt = padX + sec.xPos * pw;
+        const offsetVal = activeView === 'side' ? sec.zOffset : sec.yOffset;
+        const dimensionVal = activeView === 'side' ? sec.height : sec.width;
+        
+        const cy_pt = cy - offsetVal * scaleZ;
+        const top_pt = cy - (offsetVal + dimensionVal / 2) * scaleZ;
+
+        if (Math.hypot(mx - cx_pt, my - cy_pt) < 10) {
+          setCursorStyle('move');
+          found = true;
+          break;
+        }
+        if (sec.xPos > 0.01 && Math.hypot(mx - cx_pt, my - top_pt) < 10) {
+          setCursorStyle('ns-resize');
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) setCursorStyle('default');
+  };
+
+  const handleMouseUp = () => setIsDragging(null);
+
+  return (
+    <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-850 flex flex-col items-center space-y-2 my-2.5 shadow-md">
+      <div className="w-full flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+        <span className="flex items-center gap-1.5 text-slate-300">
+          <Move className="w-3.5 h-3.5 text-sky-500" /> Longitudinal Splines
+        </span>
+        {!isExpanded ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsExpanded(true)}
+              title="Expand Editor"
+              className="p-1 text-slate-400 hover:text-sky-400 rounded hover:bg-slate-900 transition-colors"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+            <div className="flex bg-slate-900 rounded p-0.5 border border-slate-800">
+              <button
+                onClick={() => setActiveView('side')}
+                className={`px-2 py-0.5 rounded text-[9px] transition-all duration-150 ${activeView === 'side' ? 'bg-sky-550/20 text-sky-400 border border-sky-500/30 font-extrabold shadow-inner' : 'text-slate-500 font-medium hover:text-slate-300'}`}
+              >
+                Side (Z)
+              </button>
+              <button
+                onClick={() => setActiveView('top')}
+                className={`px-2 py-0.5 rounded text-[9px] transition-all duration-150 ${activeView === 'top' ? 'bg-emerald-550/20 text-emerald-400 border border-emerald-500/30 font-extrabold shadow-inner' : 'text-slate-500 font-medium hover:text-slate-300'}`}
+              >
+                Top (Y)
+              </button>
+            </div>
+          </div>
+        ) : (
+          <span className="text-[9px] text-sky-400 animate-pulse font-bold tracking-normal font-sans">Expanded Editor Open</span>
+        )}
+      </div>
+
+      {!isExpanded ? (
+        <canvas
+          ref={canvasRef}
+          style={{ width: `${W}px`, height: `${H}px`, cursor: cursorStyle }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          className="rounded bg-[#0B0F19] border border-slate-850 shadow-inner"
+        />
+      ) : (
+        <div
+          onClick={() => setIsExpanded(true)}
+          className="rounded bg-[#0B0F19] border border-slate-850 w-[270px] h-[160px] flex flex-col items-center justify-center space-y-2 cursor-pointer hover:bg-slate-900/50 transition-all duration-150 group shadow-inner"
+        >
+          <Maximize2 className="w-5 h-5 text-sky-400 group-hover:scale-110 transition-transform duration-150 animate-pulse" />
+          <span className="text-[10px] text-slate-400 font-mono font-bold">Open Expanded View</span>
+        </div>
+      )}
+
+      {!isExpanded && (
+        <>
+          <div className="text-[9px] text-slate-500 flex items-center justify-between w-full font-mono px-1 gap-2">
+            <div className="flex gap-2.5">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span> Position
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block"></span> {activeView === 'side' ? 'Height' : 'Width'}
+              </span>
+            </div>
+            <div className="flex gap-2.5">
+              <label className="flex items-center gap-1 cursor-pointer text-slate-400 select-none hover:text-slate-200 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={snapToGrid}
+                  onChange={(e) => setSnapToGrid(e.target.checked)}
+                  className="rounded bg-slate-900 border-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
+                />
+                <span>Snap</span>
+              </label>
+              <label className="flex items-center gap-1 cursor-pointer text-slate-400 select-none hover:text-slate-200 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={syncDimensions}
+                  onChange={(e) => setSyncDimensions(e.target.checked)}
+                  className="rounded bg-slate-900 border-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-3 h-3 cursor-pointer"
+                />
+                <span>Sync W&H</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-between w-full border-t border-slate-900/50 pt-2 gap-2 mt-0.5 px-0.5">
+            <button
+              onClick={handleAddSection}
+              className="flex-1 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-550/20 rounded hover:bg-emerald-500/20 text-[9px] font-bold transition flex items-center justify-center gap-1"
+            >
+              <Plus className="w-2.5 h-2.5" /> Add Station
+            </button>
+            <button
+              onClick={handleDeleteSelected}
+              disabled={resolved.length <= 2 || selectedType !== 'section'}
+              className="flex-1 py-1 bg-rose-500/10 text-rose-400 border border-rose-550/20 rounded hover:bg-rose-500/20 text-[9px] font-bold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+            >
+              <X className="w-2.5 h-2.5" /> Delete Selected
+            </button>
+          </div>
+        </>
+      )}
+
+      {isExpanded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
+          <div 
+            className="bg-slate-900 border border-slate-800 rounded-xl p-5 w-[880px] shadow-2xl flex flex-col space-y-4 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center pb-2.5 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Move className="w-4 h-4 text-sky-500" />
+                <span className="font-bold text-xs text-slate-200 uppercase font-mono tracking-wider">Longitudinal Profile Editor</span>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Station Manager Buttons */}
+                <div className="flex items-center gap-2 border-r border-slate-800 pr-4">
+                  <button
+                    onClick={handleAddSection}
+                    className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-550/20 rounded hover:bg-emerald-500/20 text-xs font-bold transition flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Station
+                  </button>
+                  <button
+                    onClick={handleDeleteSelected}
+                    disabled={resolved.length <= 2 || selectedType !== 'section'}
+                    className="px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-550/20 rounded hover:bg-rose-500/20 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    <X className="w-3.5 h-3.5" /> Delete Selected
+                  </button>
+                </div>
+
+                {/* Tab switchers */}
+                <div className="flex bg-slate-950 rounded p-0.5 border border-slate-850">
+                  <button
+                    onClick={() => setActiveView('side')}
+                    className={`px-3 py-1 rounded text-xs transition-all duration-150 ${activeView === 'side' ? 'bg-sky-550/20 text-sky-400 border border-sky-550/30 font-bold shadow-inner' : 'text-slate-500 font-medium hover:text-slate-300'}`}
+                  >
+                    Side View (Z-Offsets & Height)
+                  </button>
+                  <button
+                    onClick={() => setActiveView('top')}
+                    className={`px-3 py-1 rounded text-xs transition-all duration-150 ${activeView === 'top' ? 'bg-emerald-550/20 text-emerald-400 border border-emerald-550/30 font-bold shadow-inner' : 'text-slate-500 font-medium hover:text-slate-300'}`}
+                  >
+                    Top View (Y-Offsets & Width)
+                  </button>
+                </div>
+                {/* Close Button */}
+                <button
+                  onClick={() => setIsExpanded(false)}
+                  className="p-1 text-slate-400 hover:text-rose-400 rounded hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Canvas */}
+            <div className="flex justify-center bg-slate-950 rounded-xl p-4 border border-slate-850 shadow-inner">
+              <canvas
+                ref={canvasRef}
+                style={{ width: `${W}px`, height: `${H}px`, cursor: cursorStyle }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                className="rounded bg-[#0B0F19] border border-slate-850"
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="text-[10px] text-slate-500 flex items-center justify-between w-full font-mono px-1">
+              <div className="flex gap-4">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block"></span> Position & Offsets
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span> {activeView === 'side' ? 'Height' : 'Width'}
+                </span>
+              </div>
+              <div className="flex gap-5">
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 select-none hover:text-slate-200 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={snapToGrid}
+                    onChange={(e) => setSnapToGrid(e.target.checked)}
+                    className="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs">Snap to Grid</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-400 select-none hover:text-slate-200 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={syncDimensions}
+                    onChange={(e) => setSyncDimensions(e.target.checked)}
+                    className="rounded bg-slate-950 border-slate-800 text-sky-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs">Sync Width/Height</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function renderMaterialOptions() {
   const categories = {
     metals: 'Metals',
@@ -394,7 +1253,6 @@ function renderMaterialOptions() {
     );
   });
 }
-
 export function RightProperties() {
   const model = useAircraftStore((state) => state.model);
   const selectedId = useAircraftStore((state) => state.selectedId);
@@ -402,6 +1260,9 @@ export function RightProperties() {
 
   const updateFuselage = useAircraftStore((state) => state.updateFuselage);
   const updateFuselageSection = useAircraftStore((state) => state.updateFuselageSection);
+  const addFuselageSection = useAircraftStore((state) => state.addFuselageSection);
+  const deleteFuselageSection = useAircraftStore((state) => state.deleteFuselageSection);
+  const setSelected = useAircraftStore((state) => state.setSelected);
   const updateWing = useAircraftStore((state) => state.updateWing);
   const updateTail = useAircraftStore((state) => state.updateTail);
   const updateEngine = useAircraftStore((state) => state.updateEngine);
@@ -525,6 +1386,23 @@ export function RightProperties() {
               onChange={(val) => updateFuselage({ tail: val })}
             />
 
+            {/* Tail Roundness (S) */}
+            <PropertyRow
+              label="Tail Roundness (S)"
+              value={activeFuselage.tailRoundness !== undefined ? activeFuselage.tailRoundness : 0.75}
+              min={0.0}
+              max={2.0}
+              step={0.05}
+              onChange={(val) => updateFuselage({ tailRoundness: val })}
+            />
+
+            {/* Interactive Longitudinal Splines (Side View) Editor */}
+            <SideProfileSketchCanvas
+              fuselage={activeFuselage}
+              onChangeSection={updateFuselageSection}
+              onChangeFuselage={updateFuselage}
+            />
+
             {/* Color */}
             <div className="flex justify-between items-center pt-2 border-t border-slate-200">
               <span className="text-slate-600 font-medium flex items-center gap-1.5"><Paintbrush className="w-3.5 h-3.5" /> Component Color</span>
@@ -547,6 +1425,189 @@ export function RightProperties() {
                 {renderMaterialOptions()}
               </select>
             </div>
+
+            {/* FUSELAGE PROFILE PRESETS */}
+            <div className="pt-2 border-t border-slate-200 space-y-2">
+              <span className="text-slate-600 font-bold block text-sky-700">Fuselage Design Presets</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    updateFuselage({
+                      length: 35.0,
+                      noseRoundness: 0.75,
+                      noseZ: -0.2,
+                      tail: 0.25,
+                      tailZ: 1.2,
+                      sections: [
+                        { id: 'sec-0', name: 'Nose Dome', xPos: 0.0, width: 0.8, height: 0.8, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-1', name: 'Cockpit Station', xPos: 0.12, width: 2.2, height: 2.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-2', name: 'Mid Cabin', xPos: 0.50, width: 2.2, height: 2.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-3', name: 'Aft Cabin', xPos: 0.75, width: 2.2, height: 2.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-4', name: 'Tail Cone', xPos: 0.95, width: 1.2, height: 1.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                      ],
+                    });
+                  }}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-sky-100 border border-slate-200 rounded text-center font-medium transition duration-150"
+                >
+                  Commercial Airliner
+                </button>
+                <button
+                  onClick={() => {
+                    updateFuselage({
+                      length: 16.0,
+                      noseRoundness: 0.15,
+                      noseZ: 0.0,
+                      tail: 0.75,
+                      tailZ: 0.0,
+                      sections: [
+                        { id: 'sec-0', name: 'Radome Tip', xPos: 0.0, width: 0.2, height: 0.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-1', name: 'Cockpit', xPos: 0.25, width: 1.2, height: 1.4, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-2', name: 'Engine Intake', xPos: 0.50, width: 1.6, height: 1.4, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-3', name: 'Mid Fuselage', xPos: 0.75, width: 1.8, height: 1.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-4', name: 'Nozzle Exit', xPos: 1.0, width: 1.1, height: 1.1, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                      ],
+                    });
+                  }}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-sky-100 border border-slate-200 rounded text-center font-medium transition duration-150"
+                >
+                  Fighter Jet
+                </button>
+                <button
+                  onClick={() => {
+                    updateFuselage({
+                      length: 7.5,
+                      noseRoundness: 0.6,
+                      noseZ: -0.05,
+                      tail: 0.1,
+                      tailZ: 0.15,
+                      sections: [
+                        { id: 'sec-0', name: 'Nose Tip', xPos: 0.0, width: 0.3, height: 0.3, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-1', name: 'Pilot Cockpit', xPos: 0.18, width: 0.65, height: 0.75, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-2', name: 'Fuselage Pod', xPos: 0.35, width: 0.65, height: 0.75, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-3', name: 'Tail Boom Start', xPos: 0.60, width: 0.25, height: 0.25, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-4', name: 'Boom End', xPos: 0.98, width: 0.08, height: 0.08, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                      ],
+                    });
+                  }}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-sky-100 border border-slate-200 rounded text-center font-medium transition duration-150"
+                >
+                  Glider / Sailplane
+                </button>
+                <button
+                  onClick={() => {
+                    updateFuselage({
+                      length: 8.5,
+                      noseRoundness: 0.6,
+                      noseZ: 0.0,
+                      tail: 0.2,
+                      tailZ: 0.3,
+                      sections: [
+                        { id: 'sec-0', name: 'Spinner Tip', xPos: 0.0, width: 0.4, height: 0.4, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-1', name: 'Engine Cowl', xPos: 0.12, width: 1.1, height: 1.1, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-2', name: 'Cabin Front', xPos: 0.38, width: 1.25, height: 1.35, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-3', name: 'Cabin Aft', xPos: 0.65, width: 1.1, height: 1.2, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-4', name: 'Tail Cone', xPos: 0.95, width: 0.45, height: 0.45, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                      ],
+                    });
+                  }}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-sky-100 border border-slate-200 rounded text-center font-medium transition duration-150"
+                >
+                  General Aviation
+                </button>
+              </div>
+            </div>
+
+            {/* FUSELAGE QUICK ALIGNMENT UTILITIES */}
+            <div className="pt-2 border-t border-slate-200 space-y-2">
+              <span className="text-slate-600 font-bold block text-sky-700">Quick Alignment Utilities</span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    updateFuselage({
+                      noseY: 0,
+                      tailY: 0,
+                      sections: activeFuselage.sections.map((sec) => ({
+                        ...sec,
+                        yOffset: 0,
+                        zOffset: 0,
+                      })),
+                    });
+                  }}
+                  className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold border border-sky-200 rounded text-center transition"
+                  title="Resets all lateral (Y) and vertical (Z) station offsets to zero for perfect alignment."
+                >
+                  Align Centerline
+                </button>
+                <button
+                  onClick={() => {
+                    const count = activeFuselage.sections.length;
+                    if (count < 2) return;
+                    
+                    const sorted = [...activeFuselage.sections].sort((a, b) => a.xPos - b.xPos);
+                    const distributed = sorted.map((sec, idx) => ({
+                      ...sec,
+                      xPos: idx / (count - 1),
+                    }));
+                    
+                    updateFuselage({ sections: distributed });
+                  }}
+                  className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold border border-sky-200 rounded text-center transition"
+                  title="Resets station longitudinal position percentages to be evenly spaced along the fuselage length."
+                >
+                  Evenly Space Stations
+                </button>
+              </div>
+            </div>
+
+            {/* ACTIVE STATIONS LIST MANAGER */}
+            <div className="pt-2 border-t border-slate-200 space-y-2">
+              <div className="flex justify-between items-center text-sky-700 font-bold">
+                <span>Cross-Sections Manager ({activeFuselage.sections.length})</span>
+                <button
+                  onClick={() => {
+                    addFuselageSection();
+                  }}
+                  className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded text-[10px]"
+                >
+                  + Add Station
+                </button>
+              </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50 max-h-[180px] overflow-y-auto">
+                <table className="w-full text-[10px] text-slate-700 border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-500 border-b border-slate-200 text-left font-mono">
+                      <th className="px-2 py-1 font-bold">Name</th>
+                      <th className="px-2 py-1 font-bold">Pos %</th>
+                      <th className="px-2 py-1 font-bold">Size (W x H)</th>
+                      <th className="px-2 py-1 font-bold text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeFuselage.sections.map((sec) => (
+                      <tr
+                        key={sec.id}
+                        onClick={() => setSelected(sec.id, 'section')}
+                        className={`border-b border-slate-200/60 hover:bg-sky-50/60 cursor-pointer transition ${selectedId === sec.id ? 'bg-sky-50 font-semibold text-sky-800' : ''}`}
+                      >
+                        <td className="px-2 py-1 truncate max-w-[80px]" title={sec.name}>{sec.name}</td>
+                        <td className="px-2 py-1 font-mono">{Math.round(sec.xPos * 100)}%</td>
+                        <td className="px-2 py-1 font-mono">{sec.width.toFixed(1)} x {sec.height.toFixed(1)}m</td>
+                        <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => deleteFuselageSection(sec.id)}
+                            className="text-slate-400 hover:text-red-500 font-bold p-0.5"
+                            title="Delete Section"
+                            disabled={activeFuselage.sections.length <= 2}
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
@@ -565,6 +1626,80 @@ export function RightProperties() {
               section={activeSection}
               onChange={(params) => updateFuselageSection(activeSection.id, params)}
             />
+
+            {/* Nose Cone Radome parameters for the first section (Section 0) */}
+            {model.fuselage.sections[0]?.id === activeSection.id && (
+              <div className="bg-sky-50/50 p-3 rounded-lg border border-sky-100/70 space-y-4 my-2.5">
+                <div className="text-[10px] font-bold text-sky-800 uppercase tracking-wider font-mono flex items-center gap-1.5 border-b border-sky-100 pb-1">
+                  <Sliders className="w-3.5 h-3.5 text-sky-600" /> Nose Cone / Radome Parameters
+                </div>
+                
+                {/* Nose Roundness / Bluntness */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-slate-700 font-semibold">
+                    <span>Nose Roundness / Bluntness</span>
+                    <input
+                      type="number"
+                      step={0.05}
+                      min={0.0}
+                      max={2.0}
+                      value={model.fuselage.noseRoundness}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val)) updateFuselage({ noseRoundness: val });
+                      }}
+                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-slate-800 text-right text-xs focus:ring-1 focus:ring-sky-500 font-bold"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0.0"
+                    max="2.0"
+                    step="0.05"
+                    value={model.fuselage.noseRoundness}
+                    onChange={(e) => updateFuselage({ noseRoundness: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer accent-sky-600"
+                  />
+                  <div className="text-[10px] text-slate-500 leading-tight">
+                    0.0 = Sharp point, 0.7 = Aerodynamic radome, 2.0 = Ultra-blunt sphere
+                  </div>
+                </div>
+
+                {/* Nose Vertical Offset (Droop / Commercial Nose) */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-slate-700 font-semibold">
+                    <span>Nose Vertical Offset</span>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        step={10}
+                        min={-2000}
+                        max={2000}
+                        value={Math.round((model.fuselage.noseZ || 0) * 1000)}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val)) updateFuselage({ noseZ: val / 1000 });
+                        }}
+                        className="w-20 bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-slate-800 text-right text-xs focus:ring-1 focus:ring-sky-500 font-bold"
+                      />
+                      <span className="text-[10px] text-slate-500 font-bold">mm</span>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="-2.0"
+                    max="2.0"
+                    step="0.05"
+                    value={model.fuselage.noseZ || 0}
+                    onChange={(e) => updateFuselage({ noseZ: parseFloat(e.target.value) })}
+                    className="w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer accent-sky-600"
+                  />
+                  <div className="text-[10px] text-slate-500 leading-tight">
+                    Negative values droop nose down (Commercial Airliner profile)
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Station Label */}
             <div className="space-y-1">

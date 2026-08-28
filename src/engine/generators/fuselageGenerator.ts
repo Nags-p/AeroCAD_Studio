@@ -11,6 +11,8 @@ export interface ResolvedStation {
   nExp: number;
   mExp: number;
   cornerRadius: number;
+  zOffset: number;
+  yOffset: number;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface ResolvedStation {
 export function resolveStationPositions(sections: FuselageSection[]): ResolvedStation[] {
   if (!sections || sections.length === 0) return [];
 
-  return sections.map((sec) => ({
+  const resolved = sections.map((sec) => ({
     id: sec.id,
     xPos: Math.max(0, Math.min(1.0, sec.xPos)),
     width: sec.width,
@@ -28,7 +30,11 @@ export function resolveStationPositions(sections: FuselageSection[]): ResolvedSt
     nExp: sec.nExp || 2.0,
     mExp: sec.mExp || sec.nExp || 2.0,
     cornerRadius: sec.cornerRadius || 0.3,
+    zOffset: sec.zOffset || 0,
+    yOffset: sec.yOffset || 0,
   }));
+
+  return resolved.sort((a, b) => a.xPos - b.xPos);
 }
 
 /**
@@ -84,23 +90,19 @@ export function generateFuselageGeometry(
   const uvs: number[] = [];
   const indices: number[] = [];
 
-  // Filter sections with xPos > 0 for Catmull-Rom body spline
-  const bodySections = resolved.filter((sec) => sec.xPos > 0);
-  if (bodySections.length === 0) bodySections.push(s1);
-
-  const splineControlPoints: THREE.Vector3[] = bodySections.map(
-    (sec) => new THREE.Vector3(sec.xPos, sec.width / 2, sec.height / 2)
-  );
-
-  // Append tail base control point
-  splineControlPoints.push(
-    new THREE.Vector3(1.0, Math.max(0.05, (sLast.width / 2) * tailScale), Math.max(0.05, (sLast.height / 2) * tailScale))
-  );
-
-  const bodySpline = new THREE.CatmullRomCurve3(splineControlPoints, false, 'catmullrom', 0.5);
-
   const K = 600;
-  const rawProfile: { x: number; rx: number; ry: number; centerOffsetZ: number; centerOffsetY: number }[] = [];
+  interface ProfilePoint {
+    x: number;
+    rx: number;
+    ry: number;
+    centerOffsetZ: number;
+    centerOffsetY: number;
+    shapeType: string;
+    nExp: number;
+    mExp: number;
+    cornerRadius: number;
+  }
+  const rawProfile: ProfilePoint[] = [];
 
   for (let k = 0; k <= K; k++) {
     const t = k / K;
@@ -108,45 +110,123 @@ export function generateFuselageGeometry(
 
     let rx = 0;
     let ry = 0;
+    let shapeType = s1.shapeType;
+    let nExp = s1.nExp;
+    let mExp = s1.mExp;
+    let cornerRadius = s1.cornerRadius;
 
+    // 1. Interpolate profile dimensions (width/height) dynamically without Catmull-Rom ripples
     if (t <= t1) {
-      const u = Math.min(1.0, Math.max(0.0, t / t1));
-
-      let blendFactor = 0;
+      // Nose dome area: blend from 0 (at t=0) to s1 dimensions (at t1) using dome curve
+      const ratio = Math.max(0, Math.min(1.0, t / t1));
+      let blend = 0;
       if (S <= 1.0) {
-        const roundWeight = Math.max(0.0, S);
-        const domeCurve = Math.sqrt(u * (2.0 - u));
-        blendFactor = roundWeight * domeCurve + (1.0 - roundWeight) * u;
+        const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
+        blend = S * domeCurve + (1.0 - S) * ratio;
       } else {
-        blendFactor = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - u, 1.0 + S)));
+        blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S)));
       }
-
-      rx = (s1.width / 2) * blendFactor;
-      ry = (s1.height / 2) * blendFactor;
-
-      rx = Math.max(0.0001, rx);
-      ry = Math.max(0.0001, ry);
+      rx = (s1.width / 2) * blend;
+      ry = (s1.height / 2) * blend;
+      shapeType = s1.shapeType;
+      nExp = s1.nExp;
+      mExp = s1.mExp;
+      cornerRadius = s1.cornerRadius;
+    } else if (t >= resolved[resolved.length - 1].xPos) {
+      // Tail cone blending from last station to tail tip
+      const sLast = resolved[resolved.length - 1];
+      const xLast = sLast.xPos;
+      
+      if (xLast < 0.99) {
+        const denom = 1.0 - xLast;
+        const ratio = Math.max(0, Math.min(1.0, (t - xLast) / denom));
+        
+        // Smooth Hermite blend (smoothstep) for crease-free tail transition
+        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+        const scaleFactor = 1.0 - (1.0 - tailScale) * blend;
+        rx = (sLast.width / 2) * scaleFactor;
+        ry = (sLast.height / 2) * scaleFactor;
+      } else {
+        // Last station is already at the end of the fuselage (1.0)
+        rx = sLast.width / 2;
+        ry = sLast.height / 2;
+      }
+      shapeType = sLast.shapeType;
+      nExp = sLast.nExp || 2.0;
+      mExp = sLast.mExp || sLast.nExp || 2.0;
+      cornerRadius = sLast.cornerRadius || 0.3;
     } else {
-      const bodyT = (t - t1) / (1.0 - t1);
-      const p = bodySpline.getPoint(Math.min(1.0, Math.max(0.0, bodyT)));
-      rx = Math.max(0.0001, p.y);
-      ry = Math.max(0.0001, p.z);
+      // Mid cabin - interpolate between adjacent stations
+      let idx = 0;
+      for (let i = 0; i < resolved.length - 1; i++) {
+        if (t >= resolved[i].xPos && t <= resolved[i + 1].xPos) {
+          idx = i;
+          break;
+        }
+      }
+      const sA = resolved[idx];
+      const sB = resolved[idx + 1];
+      const denom = sB.xPos - sA.xPos;
+      const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (t - sA.xPos) / denom)) : 0.0;
+      
+      // Smooth Hermite blend (smoothstep) for continuous tangent transitions
+      const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+      
+      rx = (sA.width / 2) * (1.0 - blend) + (sB.width / 2) * blend;
+      ry = (sA.height / 2) * (1.0 - blend) + (sB.height / 2) * blend;
+      shapeType = ratio < 0.5 ? sA.shapeType : sB.shapeType;
+      nExp = (sA.nExp || 2.0) * (1.0 - blend) + (sB.nExp || 2.0) * blend;
+      mExp = (sA.mExp || sA.nExp || 2.0) * (1.0 - blend) + (sB.mExp || sB.nExp || 2.0) * blend;
+      cornerRadius = (sA.cornerRadius || 0.3) * (1.0 - blend) + (sB.cornerRadius || 0.3) * blend;
     }
 
+    rx = Math.max(0.0001, rx);
+    ry = Math.max(0.0001, ry);
+
+    // 2. Spatial shift blending
     let centerOffsetZ = 0;
     let centerOffsetY = 0;
 
     if (t <= t1) {
-      const u = Math.min(1.0, Math.max(0.0, t / t1));
-      centerOffsetZ = noseZ * (1.0 - u) * (1.0 - u);
-      centerOffsetY = noseY * (1.0 - u) * (1.0 - u);
+      const ratio = Math.max(0, Math.min(1.0, t / t1));
+      let blend = 0;
+      if (S <= 1.0) {
+        const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
+        blend = S * domeCurve + (1.0 - S) * ratio;
+      } else {
+        blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S)));
+      }
+      centerOffsetZ = noseZ + (s1.zOffset - noseZ) * blend;
+      centerOffsetY = noseY + (s1.yOffset - noseY) * blend;
     } else if (t >= tEnd) {
-      const v = Math.min(1.0, Math.max(0.0, (t - tEnd) / (1.0 - tEnd)));
-      centerOffsetZ = tailZ * v * v;
-      centerOffsetY = tailY * v * v;
+      const tailDenom = 1.0 - tEnd;
+      if (tailDenom > 0.01) {
+        const ratio = Math.max(0, Math.min(1.0, (t - tEnd) / tailDenom));
+        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+        centerOffsetZ = sLast.zOffset + (tailZ - sLast.zOffset) * blend;
+        centerOffsetY = sLast.yOffset + (tailY - sLast.yOffset) * blend;
+      } else {
+        centerOffsetZ = sLast.zOffset;
+        centerOffsetY = sLast.yOffset;
+      }
+    } else {
+      let idx = 0;
+      for (let i = 0; i < resolved.length - 1; i++) {
+        if (t >= resolved[i].xPos && t <= resolved[i + 1].xPos) {
+          idx = i;
+          break;
+        }
+      }
+      const sA = resolved[idx];
+      const sB = resolved[idx + 1];
+      const denom = sB.xPos - sA.xPos;
+      const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (t - sA.xPos) / denom)) : 0.0;
+      const blend = ratio * ratio * (3.0 - 2.0 * ratio);
+      centerOffsetZ = sA.zOffset * (1.0 - blend) + sB.zOffset * blend;
+      centerOffsetY = sA.yOffset * (1.0 - blend) + sB.yOffset * blend;
     }
 
-    rawProfile.push({ x, rx, ry, centerOffsetZ, centerOffsetY });
+    rawProfile.push({ x, rx, ry, centerOffsetZ, centerOffsetY, shapeType, nExp, mExp, cornerRadius });
   }
 
   // Compute cumulative 3D arc length along profile
@@ -165,7 +245,7 @@ export function generateFuselageGeometry(
   }
 
   // Sample axial rings at EQUAL ARC LENGTH increments
-  const sampledRings: { x: number; rx: number; ry: number; centerOffsetZ: number; centerOffsetY: number }[] = [];
+  const sampledRings: ProfilePoint[] = [];
 
   for (let i = 0; i <= axialSegments; i++) {
     const targetS = (i / axialSegments) * totalArc;
@@ -190,6 +270,10 @@ export function generateFuselageGeometry(
         ry: p0.ry + alpha * (p1.ry - p0.ry),
         centerOffsetZ: p0.centerOffsetZ + alpha * (p1.centerOffsetZ - p0.centerOffsetZ),
         centerOffsetY: p0.centerOffsetY + alpha * (p1.centerOffsetY - p0.centerOffsetY),
+        shapeType: alpha < 0.5 ? p0.shapeType : p1.shapeType,
+        nExp: p0.nExp + alpha * (p1.nExp - p0.nExp),
+        mExp: p0.mExp + alpha * (p1.mExp - p0.mExp),
+        cornerRadius: p0.cornerRadius + alpha * (p1.cornerRadius - p0.cornerRadius),
       });
     }
   }
@@ -204,12 +288,12 @@ export function generateFuselageGeometry(
 
     // Generate 2D ring points based on station XSec shapeType
     const ringPts = generateSectionPoints(
-      s1.shapeType,
+      ring.shapeType as SectionShapeType,
       ring.rx * 2,
       ring.ry * 2,
-      s1.nExp,
-      s1.mExp,
-      s1.cornerRadius,
+      ring.nExp,
+      ring.mExp,
+      ring.cornerRadius,
       undefined,
       undefined,
       radialSegments,

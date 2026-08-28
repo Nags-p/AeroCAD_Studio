@@ -51,6 +51,28 @@ function sanitizeModel(model: AircraftModel): AircraftModel {
   const m: AircraftModel = JSON.parse(JSON.stringify(model));
   const fusLen = m.fuselage?.length || 12.0;
 
+  // Filter out any sections that are located at xPos < 0.01 (nose tip), leaving the nose strictly as a single mathematical point
+  if (m.fuselage && m.fuselage.sections && m.fuselage.sections.length > 0) {
+    m.fuselage.sections = m.fuselage.sections.filter((sec) => sec.xPos >= 0.01);
+    if (m.fuselage.sections.length === 0) {
+      m.fuselage.sections.push({
+        id: 'sec-1',
+        name: 'Cabin Station',
+        xPos: 0.5,
+        width: m.fuselage.radius || 1.5,
+        height: m.fuselage.radius || 1.5,
+        nExp: 2.0,
+        shapeType: 'super_ellipse',
+        yOffset: 0,
+        zOffset: 0
+      });
+    }
+  }
+
+  if (m.fuselage) {
+    m.fuselage.tailRoundness = m.fuselage.tailRoundness !== undefined ? m.fuselage.tailRoundness : 0.75;
+  }
+
   if (m.tails) {
     m.tails = m.tails.map((tail: TailComponent) => {
       const copy = { ...tail };
@@ -381,7 +403,7 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       const model = get().model;
       const wing = model.wings[0];
       const spanY = wing ? wing.rootPos[1] + (wing.span / 2) * 0.35 : 3.0;
-      const rootX = wing ? wing.rootPos[0] + wing.rootChord * 0.45 : model.fuselage.length * 0.4;
+      const rootX = wing ? -wing.rootChord * 0.15 : model.fuselage.length * 0.4;
       const engName = `Engine Nacelle ${model.engines.length + 1}`;
       const newEngine: EngineComponent = {
         id: `eng-${Date.now()}`,

@@ -35,6 +35,8 @@ export function LeftSidebar() {
   const addFuselageSection = useAircraftStore((state) => state.addFuselageSection);
   const deleteFuselageSection = useAircraftStore((state) => state.deleteFuselageSection);
 
+  const updateFuselage = useAircraftStore((state) => state.updateFuselage);
+
   const addWing = useAircraftStore((state) => state.addWing);
   const deleteWing = useAircraftStore((state) => state.deleteWing);
 
@@ -205,6 +207,20 @@ export function LeftSidebar() {
                 >
                   {model.fuselage.locked ? <Lock className="w-3.5 h-3.5 text-amber-500" /> : <Unlock className="w-3.5 h-3.5" />}
                 </button>
+                {(model.fuselage.visible || model.fuselage.sections.length > 0) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm('Are you sure you want to delete the complete fuselage?')) {
+                        updateFuselage({ visible: false, sections: [] });
+                      }
+                    }}
+                    className="text-slate-400 hover:text-red-500 p-1"
+                    title="Delete Complete Fuselage"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 

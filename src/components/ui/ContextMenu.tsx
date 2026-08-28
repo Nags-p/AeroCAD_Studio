@@ -36,6 +36,7 @@ export function ContextMenu() {
   const jumpToHistoryIndex = useAircraftStore((state) => state.jumpToHistoryIndex);
 
   const deleteFuselageSection = useAircraftStore((state) => state.deleteFuselageSection);
+  const updateFuselage = useAircraftStore((state) => state.updateFuselage);
   const deleteWing = useAircraftStore((state) => state.deleteWing);
   const deleteTail = useAircraftStore((state) => state.deleteTail);
   const deleteEngine = useAircraftStore((state) => state.deleteEngine);
@@ -194,8 +195,20 @@ export function ContextMenu() {
             </button>
           )}
 
-          {contextMenu.targetType !== 'fuselage' && (
-            <div className="border-t border-slate-800 my-1" />
+          <div className="border-t border-slate-800 my-1" />
+
+          {contextMenu.targetType === 'fuselage' && (
+            <button
+              onClick={() => triggerAction(() => {
+                if (confirm('Are you sure you want to delete the complete fuselage?')) {
+                  updateFuselage({ visible: false, sections: [] });
+                }
+              })}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left text-red-400"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Delete Fuselage</span>
+            </button>
           )}
 
           {contextMenu.targetType === 'wing' && (

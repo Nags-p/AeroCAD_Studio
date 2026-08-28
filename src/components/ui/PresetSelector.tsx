@@ -47,7 +47,14 @@ export function PresetSelector() {
               <div
                 key={key}
                 onClick={() => {
-                  createNewFile(defaultName, key);
+                  const name = prompt("Enter a name for the new design:", defaultName);
+                  if (name === null) return; // User cancelled
+                  const trimmedName = name.trim();
+                  if (!trimmedName) {
+                    alert("Design name cannot be empty.");
+                    return;
+                  }
+                  createNewFile(trimmedName, key);
                   closeModal();
                 }}
                 className={`p-4 rounded-xl border transition-all cursor-pointer flex gap-3 relative overflow-hidden group ${

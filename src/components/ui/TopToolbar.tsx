@@ -119,7 +119,11 @@ export function TopToolbar() {
       {/* Left: Brand Logo & Title */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => setView('dashboard')}
+          onClick={() => {
+            const currentModel = useAircraftStore.getState().model;
+            useFileStore.getState().saveActiveFile(currentModel);
+            setView('dashboard');
+          }}
           className="p-1.5 rounded-lg hover:bg-slate-100 transition text-slate-500 hover:text-slate-950 flex items-center gap-1 border border-slate-200 shadow-sm"
           title="Back to Files Dashboard"
         >
@@ -176,7 +180,14 @@ export function TopToolbar() {
               <div className="absolute top-full left-0 mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
                 <button
                   onClick={() => {
-                    createNewFile("Untitled Design", "blank");
+                    const name = prompt("Enter a name for the new design:", "New Design");
+                    if (name === null) return; // User cancelled
+                    const trimmedName = name.trim();
+                    if (!trimmedName) {
+                      alert("Design name cannot be empty.");
+                      return;
+                    }
+                    createNewFile(trimmedName, "blank");
                     setActiveDropdown(null);
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
@@ -192,12 +203,19 @@ export function TopToolbar() {
                 <button
                   onClick={() => {
                     if (activeFile) {
-                      const name = `${activeFile.name} (Copy)`;
+                      const name = prompt("Enter a name for the design copy:", `${activeFile.name} (Copy)`);
+                      if (name === null) return; // User cancelled
+                      const trimmedName = name.trim();
+                      if (!trimmedName) {
+                        alert("Design name cannot be empty.");
+                        return;
+                      }
                       const newFile = {
                         id: `file-${Date.now()}`,
-                        name,
+                        name: trimmedName,
                         lastModified: new Date().toLocaleString(),
                         model: JSON.parse(JSON.stringify(model)),
+                        isDirty: true,
                       };
                       const updatedFiles = [newFile, ...files];
                       useFileStore.setState({ files: updatedFiles, activeFileId: newFile.id });
@@ -229,7 +247,12 @@ export function TopToolbar() {
                 <div className="my-1 border-t border-slate-200" />
 
                 <button
-                  onClick={() => { setView('dashboard'); setActiveDropdown(null); }}
+                  onClick={() => {
+                    const currentModel = useAircraftStore.getState().model;
+                    useFileStore.getState().saveActiveFile(currentModel);
+                    setView('dashboard');
+                    setActiveDropdown(null);
+                  }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-red-600"
                 >
                   <LogOut className="w-3.5 h-3.5 text-red-500" /> Exit to Dashboard
@@ -250,7 +273,20 @@ export function TopToolbar() {
             {activeDropdown === 'add' && (
               <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50">
                 <button
-                  onClick={() => { updateFuselage({ visible: true }); setActiveDropdown(null); }}
+                  onClick={() => {
+                    const updates: any = { visible: true };
+                    if (!model.fuselage.sections || model.fuselage.sections.length === 0) {
+                      updates.sections = [
+                        { id: 'sec-0', name: 'Nose Dome', xPos: 0.0, width: 0.8, height: 0.8, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-1', name: 'Cockpit Station', xPos: 0.15, width: 1.8, height: 1.8, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-2', name: 'Mid Cabin', xPos: 0.50, width: 1.8, height: 1.8, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-3', name: 'Aft Cabin', xPos: 0.75, width: 1.8, height: 1.8, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                        { id: 'sec-4', name: 'Tail Cone', xPos: 0.95, width: 1.0, height: 1.0, nExp: 2.0, shapeType: 'ellipse', yOffset: 0, zOffset: 0 },
+                      ];
+                    }
+                    updateFuselage(updates);
+                    setActiveDropdown(null);
+                  }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
                   <Plus className="w-3.5 h-3.5 text-sky-600" /> Standard Fuselage

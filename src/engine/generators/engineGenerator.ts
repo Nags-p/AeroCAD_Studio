@@ -75,7 +75,8 @@ export function computeEngineWingAttachment(
     pylonZTop = wingLowerZ;
   }
 
-  const engineX = engine.position[0];
+  const wingX = wing.rootPos[0] + spanT * halfSpan * Math.tan(sweepRad);
+  const engineX = wingX + engine.position[0];
 
   return {
     actualPos: [engineX, engine.position[1], engineZ],

@@ -40,6 +40,7 @@ export interface FuselageComponent {
   tail: number;          // Tail taper scale (0 to 1)
   tailZ: number;         // Tail tip vertical shift (m)
   tailY: number;         // Tail tip lateral shift (m)
+  tailRoundness?: number;// Tail roundness curve (0 to 2)
   sec1_w: number;
   sec1_h: number;
   sec1_x: number;
