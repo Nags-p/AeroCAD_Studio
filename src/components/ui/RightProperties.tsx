@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move, HelpCircle, Maximize2, X, Plus } from 'lucide-react';
+import { Sliders, Paintbrush, Wind, Box, Settings, CircleDot, Move, HelpCircle, Maximize2, Minimize2, X, Plus, ZoomIn, ZoomOut, RotateCcw, Lock } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
 import { BUILTIN_AIRFOILS } from '@/engine/math/naca';
@@ -90,8 +90,15 @@ function PropertyRow({
   const displayVal = value * unitFactor;
   const tooltip = PARAMETER_TOOLTIPS[label];
 
+  // Precision matching the exact step (e.g. step=0.05 -> 2 decimals, step=0.1 -> 1 decimal, step=1 -> 0)
+  const stepDecimals = step.toString().includes('.') ? step.toString().split('.')[1].length : 0;
+  const precision = Math.max(stepDecimals, 2);
+
+  const clampedVal = Math.min(max, Math.max(min, value));
+  const percent = Math.min(100, Math.max(0, ((clampedVal - min) / (max - min)) * 100));
+
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5 py-0.5">
       <div className="flex justify-between items-center text-slate-600 font-medium">
         <span className="flex items-center gap-1.5 group relative cursor-help select-none">
           <span>{label} {unitLabel ? `(${unitLabel})` : ''}</span>
@@ -106,34 +113,44 @@ function PropertyRow({
         </span>
         <input
           type="number"
-          step={step}
+          step={step * unitFactor}
           min={min * unitFactor}
           max={max * unitFactor}
-          value={isNaN(displayVal) ? '' : Number(displayVal.toFixed(2))}
+          value={isNaN(displayVal) ? '' : Number(displayVal.toFixed(precision))}
           onChange={(e) => {
             const parsed = parseFloat(e.target.value);
             if (!isNaN(parsed)) {
-              onChange(parsed / unitFactor);
+              onChange(parseFloat((parsed / unitFactor).toFixed(precision)));
             }
           }}
-          className="w-20 bg-slate-50 border border-slate-300 rounded px-1.5 py-0.5 font-mono text-slate-900 font-bold text-right text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+          className="w-20 bg-slate-50 border border-slate-300 rounded-md px-2 py-0.5 font-mono text-slate-900 font-bold text-right text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none transition shadow-sm"
         />
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className={`w-full h-1.5 bg-slate-200 rounded appearance-none cursor-pointer ${accentClass}`}
-      />
+      <div className="relative flex items-center">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => {
+            const parsed = parseFloat(e.target.value);
+            if (!isNaN(parsed)) {
+              onChange(parseFloat(parsed.toFixed(precision)));
+            }
+          }}
+          className="smooth-cad-slider w-full h-2 rounded-lg appearance-none cursor-grab active:cursor-grabbing bg-slate-200 transition-all duration-75"
+          style={{
+            background: `linear-gradient(to right, #0284c7 0%, #0284c7 ${percent}%, #e2e8f0 ${percent}%, #e2e8f0 100%)`,
+          }}
+        />
+      </div>
     </div>
   );
 }
 
 /**
- * Ultra-Crisp HiDPI Interactive 2D Cross-Section Sketch Canvas with Drag-to-Resize Handles
+ * Ultra-Crisp HiDPI Interactive 2D Cross-Section Sketch Canvas with Adaptive Dynamic Auto-Scaling and Drag Handles
  */
 function Station2DSketchCanvas({
   section,
@@ -145,6 +162,20 @@ function Station2DSketchCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState<'width' | 'height' | 'both' | null>(null);
   const [cursorStyle, setCursorStyle] = useState<string>('crosshair');
+  const [zoom, setZoom] = useState<number>(1.0);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+
+  // Dynamic dimensions based on expansion state
+  const displayWidth = isExpanded ? 320 : 270;
+  const displayHeight = isExpanded ? 240 : 190;
+  const cx = displayWidth / 2;
+  const cy = displayHeight / 2;
+
+  // Adaptive auto-scale: fits any section dimension (from 0.2m to 20m) comfortably inside the canvas with ~30% margin
+  const maxDim = Math.max(section.width, section.height, 1.0);
+  const targetRadius = Math.min(cx * 0.7, cy * 0.7);
+  const autoScale = targetRadius / (maxDim / 2);
+  const effectiveScale = autoScale * zoom;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -154,8 +185,6 @@ function Station2DSketchCanvas({
 
     // High-DPI / Retina Sharp Canvas Scaling
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const displayWidth = 270;
-    const displayHeight = 190;
 
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
@@ -165,30 +194,31 @@ function Station2DSketchCanvas({
 
     const w = displayWidth;
     const h = displayHeight;
-    const cx = w / 2;
-    const cy = h / 2;
 
     ctx.clearRect(0, 0, w, h);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Light CAD Grid
-    ctx.strokeStyle = '#E2E8F0';
+    // Adaptive Physical CAD Grid
+    const meterStep = maxDim > 12 ? 2.0 : maxDim > 5 ? 1.0 : 0.5;
+    const gridPx = meterStep * effectiveScale;
+
+    ctx.strokeStyle = '#F1F5F9';
     ctx.lineWidth = 1;
-    const gridSize = 25;
 
-    for (let x = 0; x < w; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-
-    for (let y = 0; y < h; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    if (gridPx >= 12) {
+      for (let x = cx % gridPx; x < w; x += gridPx) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = cy % gridPx; y < h; y += gridPx) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
     }
 
     // Coordinate Axes
@@ -207,12 +237,11 @@ function Station2DSketchCanvas({
 
     ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
     ctx.fillStyle = '#0284C7';
-    ctx.fillText('+Y', w - 18, cy - 5);
+    ctx.fillText('+Y (W)', w - 38, cy - 6);
     ctx.fillStyle = '#2563EB';
-    ctx.fillText('+Z', cx + 5, 12);
+    ctx.fillText('+Z (H)', cx + 6, 14);
 
     // Contour Points
-    const scale = 32;
     const pts = generateSectionPoints(
       section.shapeType || 'ellipse',
       section.width,
@@ -232,8 +261,8 @@ function Station2DSketchCanvas({
 
     ctx.beginPath();
     pts.forEach((pt, i) => {
-      const px = cx + pt.y * scale;
-      const py = cy - pt.z * scale;
+      const px = cx + pt.y * effectiveScale;
+      const py = cy - pt.z * effectiveScale;
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     });
@@ -243,8 +272,8 @@ function Station2DSketchCanvas({
     ctx.fillStyle = isDragging ? 'rgba(37, 99, 235, 0.2)' : 'rgba(2, 132, 199, 0.12)';
     ctx.fill();
 
-    const rx = (section.width / 2) * scale;
-    const ry = (section.height / 2) * scale;
+    const rx = (section.width / 2) * effectiveScale;
+    const ry = (section.height / 2) * effectiveScale;
 
     const drawHandle = (hx: number, hy: number, color: string, active: boolean) => {
       ctx.save();
@@ -258,21 +287,74 @@ function Station2DSketchCanvas({
       ctx.restore();
     };
 
-    if (section.shapeType !== 'point') {
+    if (section.shapeType === 'circle') {
+      // Single diameter/radius handle for circle
+      drawHandle(cx + rx, cy, '#0284C7', isDragging !== null);
+
+      // Single diameter pill badge
+      const labelText = `Ø = ${section.width.toFixed(2)}m`;
+      ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+      const textWidth = ctx.measureText(labelText).width;
+      const badgeY = Math.min(cy + ry + 18, h - 14);
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.strokeStyle = '#BAE6FD';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(cx - textWidth / 2 - 8, badgeY - 11, textWidth + 16, 17, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#0369A1';
+      ctx.textAlign = 'center';
+      ctx.fillText(labelText, cx, badgeY + 1);
+      ctx.restore();
+    } else if (section.shapeType !== 'point') {
+      // 4 handles for non-circle shapes (Width orange left/right, Height blue top/bottom)
       drawHandle(cx + rx, cy, '#D97706', isDragging === 'width' || isDragging === 'both');
       drawHandle(cx - rx, cy, '#D97706', isDragging === 'width' || isDragging === 'both');
       drawHandle(cx, cy - ry, '#0284C7', isDragging === 'height' || isDragging === 'both');
       drawHandle(cx, cy + ry, '#0284C7', isDragging === 'height' || isDragging === 'both');
+
+      // Dimension labels with badges
+      const wText = `W = ${section.width.toFixed(2)}m`;
+      const hText = `H = ${section.height.toFixed(2)}m`;
+      ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+
+      ctx.save();
+      // Width badge
+      const wWidth = ctx.measureText(wText).width;
+      const wY = Math.min(cy + ry + 16, h - 12);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.strokeStyle = '#FED7AA';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(cx - wWidth / 2 - 6, wY - 10, wWidth + 12, 15, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#C2410C';
+      ctx.textAlign = 'center';
+      ctx.fillText(wText, cx, wY);
+
+      // Height badge
+      const hWidth = ctx.measureText(hText).width;
+      const hX = Math.min(cx + rx + 18, w - hWidth / 2 - 10);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.strokeStyle = '#BAE6FD';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(hX - hWidth / 2 - 6, cy - 8, hWidth + 12, 15, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#0369A1';
+      ctx.textAlign = 'center';
+      ctx.fillText(hText, hX, cy + 3);
+      ctx.restore();
     }
 
-    ctx.fillStyle = '#0F172A';
-    ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`W = ${section.width.toFixed(2)}m`, cx, Math.min(cy + ry + 15, h - 6));
-    ctx.fillText(`H = ${section.height.toFixed(2)}m`, Math.min(cx + rx + 25, w - 26), cy + 4);
-
     ctx.restore();
-  }, [section, isDragging]);
+  }, [section, isDragging, zoom, isExpanded, displayWidth, displayHeight, cx, cy, effectiveScale, maxDim]);
 
   // Mouse Interaction Handlers for Canvas Dragging
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -282,20 +364,30 @@ function Station2DSketchCanvas({
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    const cx = 270 / 2;
-    const cy = 190 / 2;
-    const scale = 32;
-    const rx = (section.width / 2) * scale;
-    const ry = (section.height / 2) * scale;
+    const rx = (section.width / 2) * effectiveScale;
+    const ry = (section.height / 2) * effectiveScale;
 
-    // Right handle (Width)
-    if (Math.hypot(mx - (cx + rx), my - cy) < 14 || Math.hypot(mx - (cx - rx), my - cy) < 14) {
+    if (section.shapeType === 'circle') {
+      // Single handle at (cx + rx, cy) or perimeter click
+      if (Math.hypot(mx - (cx + rx), my - cy) < 18 || Math.abs(Math.hypot(mx - cx, my - cy) - rx) < 12) {
+        setIsDragging('width');
+        return;
+      }
+      if (Math.hypot(mx - cx, my - cy) < rx) {
+        setIsDragging('both');
+        return;
+      }
+      return;
+    }
+
+    // Right/Left handle (Width)
+    if (Math.hypot(mx - (cx + rx), my - cy) < 16 || Math.hypot(mx - (cx - rx), my - cy) < 16) {
       setIsDragging('width');
       return;
     }
 
-    // Top handle (Height)
-    if (Math.hypot(mx - cx, my - (cy - ry)) < 14 || Math.hypot(mx - cx, my - (cy + ry)) < 14) {
+    // Top/Bottom handle (Height)
+    if (Math.hypot(mx - cx, my - (cy - ry)) < 16 || Math.hypot(mx - cx, my - (cy + ry)) < 16) {
       setIsDragging('height');
       return;
     }
@@ -314,32 +406,45 @@ function Station2DSketchCanvas({
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    const cx = 270 / 2;
-    const cy = 190 / 2;
-    const scale = 32;
-
     if (isDragging) {
+      if (section.shapeType === 'circle') {
+        const dist = Math.hypot(mx - cx, my - cy);
+        const newDiam = Math.max(0.1, parseFloat(((dist * 2) / effectiveScale).toFixed(2)));
+        onChange({ width: newDiam, height: newDiam });
+        return;
+      }
       if (isDragging === 'width') {
-        const newW = Math.max(0.2, (Math.abs(mx - cx) * 2) / scale);
-        onChange(section.shapeType === 'circle' ? { width: newW, height: newW } : { width: newW });
+        const newW = Math.max(0.1, parseFloat(((Math.abs(mx - cx) * 2) / effectiveScale).toFixed(2)));
+        onChange({ width: newW });
       } else if (isDragging === 'height') {
-        const newH = Math.max(0.2, (Math.abs(cy - my) * 2) / scale);
+        const newH = Math.max(0.1, parseFloat(((Math.abs(cy - my) * 2) / effectiveScale).toFixed(2)));
         onChange({ height: newH });
       } else if (isDragging === 'both') {
-        const newW = Math.max(0.2, (Math.abs(mx - cx) * 2) / scale);
-        const newH = Math.max(0.2, (Math.abs(cy - my) * 2) / scale);
-        onChange(section.shapeType === 'circle' ? { width: newW, height: newW } : { width: newW, height: newH });
+        const newW = Math.max(0.1, parseFloat(((Math.abs(mx - cx) * 2) / effectiveScale).toFixed(2)));
+        const newH = Math.max(0.1, parseFloat(((Math.abs(cy - my) * 2) / effectiveScale).toFixed(2)));
+        onChange({ width: newW, height: newH });
       }
       return;
     }
 
     // Hover Cursor Detection
-    const rx = (section.width / 2) * scale;
-    const ry = (section.height / 2) * scale;
+    const rx = (section.width / 2) * effectiveScale;
+    const ry = (section.height / 2) * effectiveScale;
 
-    if (Math.hypot(mx - (cx + rx), my - cy) < 14 || Math.hypot(mx - (cx - rx), my - cy) < 14) {
+    if (section.shapeType === 'circle') {
+      if (Math.hypot(mx - (cx + rx), my - cy) < 18 || Math.abs(Math.hypot(mx - cx, my - cy) - rx) < 12) {
+        setCursorStyle('ew-resize');
+      } else if (Math.hypot(mx - cx, my - cy) < rx) {
+        setCursorStyle('grab');
+      } else {
+        setCursorStyle('crosshair');
+      }
+      return;
+    }
+
+    if (Math.hypot(mx - (cx + rx), my - cy) < 16 || Math.hypot(mx - (cx - rx), my - cy) < 16) {
       setCursorStyle('ew-resize');
-    } else if (Math.hypot(mx - cx, my - (cy - ry)) < 14 || Math.hypot(mx - cx, my - (cy + ry)) < 14) {
+    } else if (Math.hypot(mx - cx, my - (cy - ry)) < 16 || Math.hypot(mx - cx, my - (cy + ry)) < 16) {
       setCursorStyle('ns-resize');
     } else if (Math.hypot((mx - cx) / Math.max(1, rx), (my - cy) / Math.max(1, ry)) < 1.1) {
       setCursorStyle('grab');
@@ -350,23 +455,74 @@ function Station2DSketchCanvas({
 
   const handleMouseUp = () => setIsDragging(null);
 
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.1 : -0.1;
+    setZoom((z) => Math.min(3.0, Math.max(0.4, parseFloat((z + delta).toFixed(2)))));
+  };
+
   return (
-    <div className="bg-slate-50 p-2 rounded-lg border border-slate-200 shadow-inner flex flex-col items-center space-y-1.5 my-2">
+    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 shadow-inner flex flex-col items-center space-y-2 my-2 w-full">
       <div className="w-full flex justify-between items-center text-[10px] font-bold text-sky-700 uppercase tracking-wider font-mono">
         <span className="flex items-center gap-1">
-          <Move className="w-3 h-3 text-sky-600" /> Interactive 2D Drag Canvas
+          <Move className="w-3 h-3 text-sky-600" /> 2D Cross-Section Drag Canvas
         </span>
-        <span className="text-slate-500">{section.shapeType || 'ellipse'}</span>
+        
+        {/* Zoom & Canvas controls */}
+        <div className="flex items-center gap-1 select-none">
+          <span className="text-[9px] font-mono text-slate-400 mr-1 hidden sm:inline">
+            Grid: {maxDim > 12 ? '2m' : maxDim > 5 ? '1m' : '0.5m'}
+          </span>
+          <button
+            onClick={() => setZoom((z) => Math.max(0.4, parseFloat((z - 0.15).toFixed(2))))}
+            className="p-1 hover:bg-slate-200/80 rounded text-slate-600 transition cursor-pointer"
+            title="Zoom Out (or mouse scroll down)"
+          >
+            <ZoomOut className="w-3 h-3" />
+          </button>
+          <span className="text-[9px] font-mono text-slate-500 min-w-[32px] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => setZoom((z) => Math.min(3.0, parseFloat((z + 0.15).toFixed(2))))}
+            className="p-1 hover:bg-slate-200/80 rounded text-slate-600 transition cursor-pointer"
+            title="Zoom In (or mouse scroll up)"
+          >
+            <ZoomIn className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => setZoom(1.0)}
+            className="p-1 hover:bg-slate-200/80 rounded text-slate-600 transition cursor-pointer"
+            title="Auto-Fit / Reset Zoom"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1 hover:bg-slate-200/80 rounded text-slate-600 transition cursor-pointer"
+            title={isExpanded ? 'Shrink Canvas' : 'Expand Canvas'}
+          >
+            {isExpanded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+          </button>
+        </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        style={{ width: '270px', height: '190px', cursor: cursorStyle }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        className="rounded bg-white border border-slate-200 shadow-sm"
-      />
+
+      <div className="relative overflow-hidden rounded-lg border border-slate-200 shadow-sm bg-white">
+        <canvas
+          ref={canvasRef}
+          style={{ width: `${displayWidth}px`, height: `${displayHeight}px`, cursor: cursorStyle }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
+          className="block"
+        />
+      </div>
+      <div className="w-full flex justify-between items-center text-[10px] text-slate-400 px-1">
+        <span>{section.shapeType === 'circle' ? 'Drag handle or perimeter to resize Diameter' : 'Drag handles to resize W & H'}</span>
+        <span>Scroll to Zoom</span>
+      </div>
     </div>
   );
 }
@@ -1593,14 +1749,19 @@ export function RightProperties() {
                         <td className="px-2 py-1 font-mono">{Math.round(sec.xPos * 100)}%</td>
                         <td className="px-2 py-1 font-mono">{sec.width.toFixed(1)} x {sec.height.toFixed(1)}m</td>
                         <td className="px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => deleteFuselageSection(sec.id)}
-                            className="text-slate-400 hover:text-red-500 font-bold p-0.5"
-                            title="Delete Section"
-                            disabled={activeFuselage.sections.length <= 2}
-                          >
-                            ×
-                          </button>
+                          {activeFuselage.sections.length > 3 ? (
+                            <button
+                              onClick={() => deleteFuselageSection(sec.id)}
+                              className="text-slate-400 hover:text-red-500 font-bold p-0.5 transition"
+                              title="Delete Section"
+                            >
+                              ×
+                            </button>
+                          ) : (
+                            <span title="Compulsory Core Station (Nose, Mid, Tail are permanent)">
+                              <Lock className="w-2.5 h-2.5 mx-auto text-slate-300" />
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

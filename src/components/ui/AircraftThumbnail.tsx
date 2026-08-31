@@ -7,6 +7,7 @@ import { generateFuselageGeometry } from '@/engine/generators/fuselageGenerator'
 import { generateWingGeometry } from '@/engine/generators/wingGenerator';
 import { generateTailGeometry } from '@/engine/generators/tailGenerator';
 import { generateEngineGeometry } from '@/engine/generators/engineGenerator';
+import { Plane, Layers } from 'lucide-react';
 
 interface AircraftThumbnailProps {
   model: AircraftModel;
@@ -14,6 +15,7 @@ interface AircraftThumbnailProps {
   height?: number;
   className?: string;
   viewMode?: 'iso' | 'top';
+  interactive?: boolean;
 }
 
 /**
@@ -75,16 +77,23 @@ class OffscreenThumbnailRenderer {
     const scene = new THREE.Scene();
     const group = new THREE.Group();
 
+    let hasVisibleGeometry = false;
+
     // 1. Fuselage Geometry
     if (model.fuselage && model.fuselage.visible) {
-      const geo = generateFuselageGeometry(model.fuselage);
-      const mat = new THREE.MeshStandardMaterial({
-        color: model.fuselage.color || '#0284C7',
-        roughness: 0.25,
-        metalness: 0.45,
-        side: THREE.DoubleSide,
-      });
-      group.add(new THREE.Mesh(geo, mat));
+      try {
+        const geo = generateFuselageGeometry(model.fuselage);
+        const mat = new THREE.MeshStandardMaterial({
+          color: model.fuselage.color || '#0284C7',
+          roughness: 0.3,
+          metalness: 0.35,
+          side: THREE.DoubleSide,
+        });
+        group.add(new THREE.Mesh(geo, mat));
+        hasVisibleGeometry = true;
+      } catch (e) {
+        console.warn('Failed to generate fuselage thumbnail geo', e);
+      }
     }
 
     // 2. Main Wings Geometry
@@ -92,14 +101,19 @@ class OffscreenThumbnailRenderer {
       model.wings
         .filter((w) => w.visible)
         .forEach((w) => {
-          const geo = generateWingGeometry(w, false);
-          const mat = new THREE.MeshStandardMaterial({
-            color: w.color || '#0284C7',
-            roughness: 0.3,
-            metalness: 0.4,
-            side: THREE.DoubleSide,
-          });
-          group.add(new THREE.Mesh(geo, mat));
+          try {
+            const geo = generateWingGeometry(w, false, 'low');
+            const mat = new THREE.MeshStandardMaterial({
+              color: w.color || '#0284C7',
+              roughness: 0.28,
+              metalness: 0.38,
+              side: THREE.DoubleSide,
+            });
+            group.add(new THREE.Mesh(geo, mat));
+            hasVisibleGeometry = true;
+          } catch (e) {
+            console.warn('Failed to generate wing thumbnail geo', e);
+          }
         });
     }
 
@@ -108,14 +122,19 @@ class OffscreenThumbnailRenderer {
       model.tails
         .filter((t) => t.visible)
         .forEach((t) => {
-          const geo = generateTailGeometry(t);
-          const mat = new THREE.MeshStandardMaterial({
-            color: t.color || '#0369A1',
-            roughness: 0.3,
-            metalness: 0.4,
-            side: THREE.DoubleSide,
-          });
-          group.add(new THREE.Mesh(geo, mat));
+          try {
+            const geo = generateTailGeometry(t);
+            const mat = new THREE.MeshStandardMaterial({
+              color: t.color || '#0369A1',
+              roughness: 0.3,
+              metalness: 0.35,
+              side: THREE.DoubleSide,
+            });
+            group.add(new THREE.Mesh(geo, mat));
+            hasVisibleGeometry = true;
+          } catch (e) {
+            console.warn('Failed to generate tail thumbnail geo', e);
+          }
         });
     }
 
@@ -124,15 +143,24 @@ class OffscreenThumbnailRenderer {
       model.engines
         .filter((e) => e.visible)
         .forEach((e) => {
-          const geo = generateEngineGeometry(e, model.wings);
-          const mat = new THREE.MeshStandardMaterial({
-            color: e.color || '#334155',
-            roughness: 0.35,
-            metalness: 0.55,
-            side: THREE.DoubleSide,
-          });
-          group.add(new THREE.Mesh(geo, mat));
+          try {
+            const geo = generateEngineGeometry(e, model.wings);
+            const mat = new THREE.MeshStandardMaterial({
+              color: e.color || '#1E293B',
+              roughness: 0.35,
+              metalness: 0.6,
+              side: THREE.DoubleSide,
+            });
+            group.add(new THREE.Mesh(geo, mat));
+            hasVisibleGeometry = true;
+          } catch (e) {
+            console.warn('Failed to generate engine thumbnail geo', e);
+          }
         });
+    }
+
+    if (!hasVisibleGeometry) {
+      return false;
     }
 
     scene.add(group);
@@ -154,34 +182,43 @@ class OffscreenThumbnailRenderer {
     const size = box.getSize(new THREE.Vector3());
     group.position.sub(center);
 
-    const maxDim = Math.max(size.x, size.y, size.z, 1);
-    const camera = new THREE.PerspectiveCamera(38, renderWidth / renderHeight, 0.1, maxDim * 20);
+    const maxDim = Math.max(size.x, size.y, size.z, 1.0);
+    const camera = new THREE.PerspectiveCamera(35, renderWidth / renderHeight, 0.1, maxDim * 25);
 
     if (viewMode === 'top') {
-      camera.position.set(0, maxDim * 2.3, 0);
+      camera.position.set(0, maxDim * 2.2, 0);
       camera.up.set(-1, 0, 0);
       camera.lookAt(0, 0, 0);
     } else {
-      // 3/4 Isometric CAD Studio View: Look down and across the aircraft
-      camera.position.set(maxDim * 1.35, maxDim * 1.05, maxDim * 1.35);
+      // 3/4 Isometric CAD Studio View: Looking from front-left-above for optimal aerospace perspective
+      camera.position.set(-maxDim * 1.5, maxDim * 1.05, maxDim * 1.4);
+      camera.up.set(0, 1, 0);
       camera.lookAt(0, 0, 0);
     }
 
-    // Studio Lighting setup for crisp light-theme background
-    const ambLight = new THREE.AmbientLight(0xffffff, 1.25);
+    // Studio Lighting setup for crisp high-end CAD rendering
+    const ambLight = new THREE.AmbientLight(0xffffff, 1.4);
     scene.add(ambLight);
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.6);
-    dirLight1.position.set(maxDim * 2, maxDim * 3, maxDim * 2);
+    // Key Light (Front-Left-Top)
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
+    dirLight1.position.set(-maxDim * 2, maxDim * 3, maxDim * 2.5);
     scene.add(dirLight1);
 
-    const dirLight2 = new THREE.DirectionalLight(0x0284c7, 0.6);
-    dirLight2.position.set(-maxDim * 2, -maxDim * 0.5, -maxDim);
+    // Rim/Accent Light (Aft-Right with sky tint)
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 1.2);
+    dirLight2.position.set(maxDim * 2.5, maxDim * 1.5, -maxDim * 2);
     scene.add(dirLight2);
 
-    const topLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    // Top Soft Light
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.9);
     topLight.position.set(0, maxDim * 4, 0);
     scene.add(topLight);
+
+    // Bottom Ambient bounce
+    const bottomLight = new THREE.DirectionalLight(0x94a3b8, 0.4);
+    bottomLight.position.set(0, -maxDim * 2, 0);
+    scene.add(bottomLight);
 
     renderer.clear();
     renderer.render(scene, camera);
@@ -238,45 +275,61 @@ export function AircraftThumbnail({
 
   return (
     <div
-      className={`relative flex items-center justify-center rounded-xl bg-gradient-to-br from-white via-sky-50/60 to-slate-100 border border-slate-200 shadow-sm overflow-hidden select-none flex-shrink-0 group ${className}`}
+      className={`relative flex items-center justify-center rounded-2xl bg-gradient-to-br from-slate-50 via-sky-50/40 to-slate-100/90 border border-slate-250/70 shadow-sm overflow-hidden select-none flex-shrink-0 group ${className}`}
       style={{ width, height }}
     >
       {/* Background Light CAD Studio Grid */}
       <svg
         width="100%"
         height="100%"
-        className="absolute inset-0 w-full h-full pointer-events-none opacity-60"
+        className="absolute inset-0 w-full h-full pointer-events-none opacity-50"
       >
         <defs>
           <pattern
             id={`grid-light-${model.id || 'thumb'}`}
-            width="10"
-            height="10"
+            width="12"
+            height="12"
             patternUnits="userSpaceOnUse"
           >
             <path
-              d="M 10 0 L 0 0 0 10"
+              d="M 12 0 L 0 0 0 12"
               fill="none"
               stroke="#0284C7"
               strokeWidth="0.5"
-              strokeOpacity="0.18"
+              strokeOpacity="0.2"
             />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill={`url(#grid-light-${model.id || 'thumb'})`} />
       </svg>
 
+      {/* CAD Blueprint Corner Crosshairs */}
+      <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 border-t border-l border-sky-400/50 pointer-events-none z-20" />
+      <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 border-t border-r border-sky-400/50 pointer-events-none z-20" />
+      <div className="absolute bottom-1.5 left-1.5 w-1.5 h-1.5 border-b border-l border-sky-400/50 pointer-events-none z-20" />
+      <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-sky-400/50 pointer-events-none z-20" />
+
       {/* Rendered 3D Exact Aircraft Canvas */}
       <canvas
         ref={canvasRef}
-        className={`w-full h-full relative z-10 object-contain transition-transform duration-300 group-hover:scale-105 ${
-          rendered ? 'opacity-100' : 'opacity-0'
+        className={`w-full h-full relative z-10 object-contain transition-all duration-300 group-hover:scale-110 ${
+          rendered ? 'opacity-100' : 'opacity-0 hidden'
         }`}
         style={{ width: '100%', height: '100%' }}
       />
 
+      {/* Fallback stylized Blueprint silhouette when model is blank/empty */}
+      {!rendered && (
+        <div className="relative z-10 flex flex-col items-center justify-center text-sky-600/70 p-2 text-center">
+          <Plane className="w-6 h-6 stroke-[1.5] text-sky-500/80 -rotate-45" />
+          <span className="text-[9px] font-mono font-bold text-sky-700/70 mt-1 uppercase tracking-wider">
+            Blueprint
+          </span>
+        </div>
+      )}
+
       {/* Subtle Inner Border Glow */}
-      <div className="absolute inset-0 rounded-xl border border-sky-100/60 pointer-events-none z-20 shadow-inner" />
+      <div className="absolute inset-0 rounded-2xl border border-sky-200/40 pointer-events-none z-20 shadow-inner" />
     </div>
   );
 }

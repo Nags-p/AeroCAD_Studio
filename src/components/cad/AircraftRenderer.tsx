@@ -214,6 +214,70 @@ function SectionHighlightRing({
   );
 }
 
+/**
+ * Creates 3D Section Apex Point Marker (for Nose Tip at X=0 and Tail Tip at X=len)
+ */
+function ApexPointMarker({
+  xLoc,
+  offsetZ = 0,
+  offsetY = 0,
+  label,
+  isSelected,
+  onClick,
+  onContextMenu,
+}: {
+  xLoc: number;
+  offsetZ?: number;
+  offsetY?: number;
+  label: string;
+  isSelected: boolean;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+  onContextMenu?: (e: ThreeEvent<MouseEvent>) => void;
+}) {
+  const colorHex = isSelected ? 0xffea00 : 0x0284c7;
+
+  return (
+    <group position={[xLoc, offsetZ, offsetY]} onClick={onClick} onContextMenu={onContextMenu}>
+      {/* Outer Glow Ring */}
+      <mesh rotation={[0, Math.PI / 2, 0]}>
+        <ringGeometry args={[0.08, 0.16, 32]} />
+        <meshBasicMaterial
+          color={colorHex}
+          transparent
+          opacity={isSelected ? 0.95 : 0.75}
+          side={THREE.DoubleSide}
+          depthTest={false}
+        />
+      </mesh>
+
+      {/* Central Solid Apex Point */}
+      <mesh>
+        <sphereGeometry args={[0.05, 16, 16]} />
+        <meshBasicMaterial
+          color={isSelected ? 0xffea00 : 0x38bdf8}
+          depthTest={false}
+        />
+      </mesh>
+
+      {/* Crosshair reticle axes */}
+      <lineSegments>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={4}
+            array={new Float32Array([
+              0, -0.22, 0,  0, 0.22, 0,
+              0, 0, -0.22,  0, 0, 0.22
+            ])}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color={colorHex} depthTest={false} transparent opacity={0.85} />
+      </lineSegments>
+    </group>
+  );
+}
+
 export function AircraftRenderer() {
   const groupRef = useRef<THREE.Group>(null);
   const model = useAircraftStore((state) => state.model);
@@ -418,29 +482,69 @@ export function AircraftRenderer() {
           />
 
           {/* Dynamic Section Ring Highlights using Unified Resolved Station Positions */}
-          {f.visible && showSections &&
-            resolvedStations.map((sec) => {
-              const xLoc = sec.xPos * len;
-              const isSel = selectedType === 'section' && selectedId === sec.id;
+          {f.visible && showSections && (
+            <>
+              {/* Nose Tip Section Apex Representation (X = 0) */}
+              <ApexPointMarker
+                xLoc={0}
+                offsetZ={f.noseZ || 0}
+                offsetY={f.noseY || 0}
+                label="Nose Tip (X = 0.0m)"
+                isSelected={selectedType === 'fuselage'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelected(f.id, 'fuselage');
+                }}
+                onContextMenu={(e) => {
+                  e.stopPropagation();
+                  showContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY, f.id, 'fuselage');
+                }}
+              />
 
-              return (
-                <SectionHighlightRing
-                  key={sec.id}
-                  xLoc={xLoc}
-                  width={sec.width}
-                  height={sec.height}
-                  isSelected={isSel}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelected(sec.id, 'section');
-                  }}
-                  onContextMenu={(e) => {
-                    e.stopPropagation();
-                    showContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY, sec.id, 'section');
-                  }}
-                />
-              );
-            })}
+              {/* Intermediate Station Cross-Section Rings */}
+              {resolvedStations.map((sec) => {
+                const xLoc = sec.xPos * len;
+                const isSel = selectedType === 'section' && selectedId === sec.id;
+
+                return (
+                  <SectionHighlightRing
+                    key={sec.id}
+                    xLoc={xLoc}
+                    width={sec.width}
+                    height={sec.height}
+                    offsetZ={sec.zOffset || 0}
+                    offsetY={sec.yOffset || 0}
+                    isSelected={isSel}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(sec.id, 'section');
+                    }}
+                    onContextMenu={(e) => {
+                      e.stopPropagation();
+                      showContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY, sec.id, 'section');
+                    }}
+                  />
+                );
+              })}
+
+              {/* Tail Tip Section Apex Representation (X = length) */}
+              <ApexPointMarker
+                xLoc={len}
+                offsetZ={f.tailZ || 0}
+                offsetY={f.tailY || 0}
+                label={`Tail Tip (X = ${len.toFixed(1)}m)`}
+                isSelected={selectedType === 'fuselage'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelected(f.id, 'fuselage');
+                }}
+                onContextMenu={(e) => {
+                  e.stopPropagation();
+                  showContextMenu(e.nativeEvent.clientX, e.nativeEvent.clientY, f.id, 'fuselage');
+                }}
+              />
+            </>
+          )}
         </group>
       ) : null}
 

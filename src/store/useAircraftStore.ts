@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AircraftModel, FuselageSection, WingComponent, TailComponent, EngineComponent } from '@/types/aircraft';
+import { AircraftModel, FuselageComponent, FuselageSection, WingComponent, TailComponent, EngineComponent } from '@/types/aircraft';
 import { AIRCRAFT_PRESETS } from '@/engine/presets/aircraftPresets';
 
 interface AircraftStoreState {
@@ -15,6 +15,8 @@ interface AircraftStoreState {
   // Actions
   setSelected: (id: string | null, type: 'fuselage' | 'section' | 'wing' | 'tail' | 'engine' | null) => void;
   updateFuselage: (params: Partial<AircraftModel['fuselage']>) => void;
+  addFuselage: () => void;
+  deleteFuselage: () => void;
   updateFuselageSection: (sectionId: string, params: Partial<FuselageSection>) => void;
   addFuselageSection: () => void;
   deleteFuselageSection: (sectionId: string) => void;
@@ -51,21 +53,46 @@ function sanitizeModel(model: AircraftModel): AircraftModel {
   const m: AircraftModel = JSON.parse(JSON.stringify(model));
   const fusLen = m.fuselage?.length || 12.0;
 
-  // Filter out any sections that are located at xPos < 0.01 (nose tip), leaving the nose strictly as a single mathematical point
-  if (m.fuselage && m.fuselage.sections && m.fuselage.sections.length > 0) {
+  // Enforce 3 compulsory non-deletable core sections (Nose, Mid, Tail) for any fuselage
+  if (m.fuselage && m.fuselage.sections) {
     m.fuselage.sections = m.fuselage.sections.filter((sec) => sec.xPos >= 0.01);
-    if (m.fuselage.sections.length === 0) {
-      m.fuselage.sections.push({
-        id: 'sec-1',
-        name: 'Cabin Station',
-        xPos: 0.5,
-        width: m.fuselage.radius || 1.5,
-        height: m.fuselage.radius || 1.5,
-        nExp: 2.0,
-        shapeType: 'super_ellipse',
-        yOffset: 0,
-        zOffset: 0
-      });
+    if (m.fuselage.sections.length < 3) {
+      const radius = m.fuselage.radius || 1.8;
+      m.fuselage.sections = [
+        {
+          id: 'sec-nose',
+          name: 'Nose Section',
+          xPos: 0.18,
+          width: parseFloat((radius * 0.85).toFixed(2)),
+          height: parseFloat((radius * 0.85).toFixed(2)),
+          nExp: 2.0,
+          shapeType: 'ellipse',
+          yOffset: 0,
+          zOffset: 0,
+        },
+        {
+          id: 'sec-mid',
+          name: 'Mid Section',
+          xPos: 0.50,
+          width: parseFloat(radius.toFixed(2)),
+          height: parseFloat(radius.toFixed(2)),
+          nExp: 2.0,
+          shapeType: 'super_ellipse',
+          yOffset: 0,
+          zOffset: 0,
+        },
+        {
+          id: 'sec-tail',
+          name: 'Tail Section',
+          xPos: 0.85,
+          width: parseFloat((radius * 0.7).toFixed(2)),
+          height: parseFloat((radius * 0.7).toFixed(2)),
+          nExp: 2.0,
+          shapeType: 'ellipse',
+          yOffset: 0,
+          zOffset: 0,
+        },
+      ];
     }
   }
 
@@ -190,6 +217,83 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
       pushState(newModel, label, true);
     },
 
+    deleteFuselage: () => {
+      const model = get().model;
+      if (!model.fuselage) return;
+      pushState({ ...model, fuselage: { ...model.fuselage, visible: false } }, 'Delete Fuselage');
+      const { selectedId, selectedType } = get();
+      if (selectedId === model.fuselage.id || selectedType === 'fuselage' || selectedType === 'section') {
+        set({ selectedId: model.wings[0]?.id || null, selectedType: model.wings[0] ? 'wing' : null });
+      }
+    },
+
+    addFuselage: () => {
+      const model = get().model;
+      const newFuselage: FuselageComponent = {
+        id: `fus-${Date.now()}`,
+        name: 'Fuselage',
+        visible: true,
+        locked: false,
+        length: 12.0,
+        radius: 1.8,
+        noseRoundness: 0.75,
+        noseAngle: 90,
+        noseZ: 0.0,
+        noseY: 0.0,
+        tail: 0.3,
+        tailZ: 0.0,
+        tailY: 0.0,
+        tailRoundness: 0.75,
+        sec1_w: 1.8,
+        sec1_h: 1.8,
+        sec1_x: 0.18,
+        sec2_w: 1.8,
+        sec2_h: 1.8,
+        sec2_x: 0.50,
+        sec3_w: 1.4,
+        sec3_h: 1.4,
+        sec3_x: 0.85,
+        color: '#0284C7',
+        sections: [
+          {
+            id: `sec-nose-${Date.now()}`,
+            name: 'Nose Section',
+            xPos: 0.18,
+            width: 1.5,
+            height: 1.5,
+            nExp: 2.0,
+            shapeType: 'ellipse',
+            yOffset: 0,
+            zOffset: 0,
+          },
+          {
+            id: `sec-mid-${Date.now()}`,
+            name: 'Mid Section',
+            xPos: 0.50,
+            width: 1.8,
+            height: 1.8,
+            nExp: 2.0,
+            shapeType: 'super_ellipse',
+            yOffset: 0,
+            zOffset: 0,
+          },
+          {
+            id: `sec-tail-${Date.now()}`,
+            name: 'Tail Section',
+            xPos: 0.85,
+            width: 1.2,
+            height: 1.2,
+            nExp: 2.0,
+            shapeType: 'ellipse',
+            yOffset: 0,
+            zOffset: 0,
+          },
+        ],
+      };
+      pushState({ ...model, fuselage: newFuselage }, 'Add Fuselage');
+      set({ selectedId: newFuselage.id, selectedType: 'fuselage' });
+    },
+
     updateFuselageSection: (sectionId, params) => {
       const model = get().model;
       const sections = model.fuselage.sections.map((sec) =>
@@ -212,25 +316,70 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
 
     addFuselageSection: () => {
       const model = get().model;
-      const count = model.fuselage.sections.length;
+      const resolved = [...model.fuselage.sections].sort((a, b) => a.xPos - b.xPos);
+      
+      if (resolved.length < 2) {
+        const newSec: FuselageSection = {
+          id: `sec-${Date.now()}`,
+          name: `Cabin Station ${model.fuselage.sections.length + 1}`,
+          xPos: 0.5,
+          width: 2.0,
+          height: 2.0,
+          nExp: 2.0,
+          shapeType: 'ellipse',
+          yOffset: 0,
+          zOffset: 0,
+        };
+        const sections = [...model.fuselage.sections, newSec];
+        pushState({ ...model, fuselage: { ...model.fuselage, sections } }, 'Add Fuselage Station');
+        set({ selectedId: newSec.id, selectedType: 'section' });
+        return;
+      }
+
+      // Find the largest gap between adjacent stations
+      let maxGap = 0;
+      let insertIndex = 0;
+      for (let i = 0; i < resolved.length - 1; i++) {
+        const gap = resolved[i + 1].xPos - resolved[i].xPos;
+        if (gap > maxGap) {
+          maxGap = gap;
+          insertIndex = i;
+        }
+      }
+
+      const sA = resolved[insertIndex];
+      const sB = resolved[insertIndex + 1];
+      const newX = parseFloat(((sA.xPos + sB.xPos) / 2).toFixed(3));
+      
+      // Interpolate dimensions and offsets
+      const newWidth = parseFloat(((sA.width + sB.width) / 2).toFixed(2));
+      const newHeight = parseFloat(((sA.height + sB.height) / 2).toFixed(2));
+      const newZ = parseFloat(((sA.zOffset + sB.zOffset) / 2).toFixed(2));
+      const newY = parseFloat(((sA.yOffset + sB.yOffset) / 2).toFixed(2));
+
       const newSec: FuselageSection = {
         id: `sec-${Date.now()}`,
-        name: `Section ${count + 1}`,
-        xPos: 0.6,
-        width: model.fuselage.radius,
-        height: model.fuselage.radius,
-        nExp: 2.0,
-        shapeType: 'super_ellipse',
-        yOffset: 0,
-        zOffset: 0,
+        name: `Cabin Station ${model.fuselage.sections.length + 1}`,
+        xPos: newX,
+        width: newWidth,
+        height: newHeight,
+        shapeType: sA.shapeType,
+        nExp: sA.nExp || 2.0,
+        mExp: sA.mExp || sA.nExp || 2.0,
+        cornerRadius: sA.cornerRadius || 0.3,
+        zOffset: newZ,
+        yOffset: newY,
       };
+
       const sections = [...model.fuselage.sections, newSec];
-      pushState({ ...model, fuselage: { ...model.fuselage, sections } }, `Add Fuselage Section ${count + 1}`);
+      pushState({ ...model, fuselage: { ...model.fuselage, sections } }, `Add ${newSec.name}`);
+      set({ selectedId: newSec.id, selectedType: 'section' });
     },
 
     deleteFuselageSection: (sectionId) => {
       const model = get().model;
-      if (model.fuselage.sections.length <= 1) return;
+      // Nose, Mid, and Tail sections are compulsory and non-deletable (minimum 3 sections)
+      if (model.fuselage.sections.length <= 3) return;
       const targetSec = model.fuselage.sections.find((sec) => sec.id === sectionId);
       const name = targetSec ? targetSec.name : 'Section';
       const sections = model.fuselage.sections.filter((sec) => sec.id !== sectionId);
@@ -352,23 +501,28 @@ export const useAircraftStore = create<AircraftStoreState>((set, get) => {
     addTail: () => {
       const model = get().model;
       const tailName = `Tail Fin ${model.tails.length + 1}`;
+      const fusLen = model.fuselage?.length || 20.0;
+      const lastSec = model.fuselage.sections[model.fuselage.sections.length - 1];
+      const fusHeight = lastSec ? lastSec.height : 2.0;
+
       const newTail: TailComponent = {
         id: `tail-${Date.now()}`,
         name: tailName,
         visible: true,
         locked: false,
         type: 'conventional',
-        horizontalSpan: 4.0,
-        horizontalChord: 1.2,
-        verticalHeight: 2.5,
-        verticalChord: 1.5,
+        horizontalSpan: parseFloat((fusHeight * 2.2).toFixed(1)),
+        horizontalChord: parseFloat((fusHeight * 0.7).toFixed(1)),
+        verticalHeight: parseFloat((fusHeight * 1.3).toFixed(1)),
+        verticalChord: parseFloat((fusHeight * 0.9).toFixed(1)),
         sweep: 30.0,
         dihedral: 0,
-        position: [model.fuselage.length * 0.85, 0, model.fuselage.radius * 0.25],
+        position: [parseFloat((fusLen * 0.88).toFixed(1)), 0, parseFloat((fusHeight * 0.35).toFixed(2))],
         color: '#0369A1',
       };
       const tails = [...model.tails, newTail];
       pushState({ ...model, tails }, `Add ${tailName}`);
+      set({ selectedId: newTail.id, selectedType: 'tail' });
     },
 
     deleteTail: (tailId) => {

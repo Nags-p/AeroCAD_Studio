@@ -87,10 +87,11 @@ export function SketcherModal() {
     ctx.fillStyle = '#0284C7';
     ctx.fillText('+Y (Width)', w - 65, cy - 6);
     ctx.fillStyle = '#2563EB';
-    ctx.fillText('+Z (Height)', cx + 6, 15);
+    // Adaptive Scale based on current dimensions
+    const maxDim = Math.max(width, height, 1.0);
+    const targetRadius = Math.min((w / 2) * 0.68, (h / 2) * 0.68);
+    const scale = targetRadius / (maxDim / 2);
 
-    // Contour
-    const scale = 45;
     const pts = generateSectionPoints(
       shapeType,
       width,
@@ -136,18 +137,24 @@ export function SketcherModal() {
       ctx.restore();
     };
 
-    if (shapeType !== 'point') {
+    if (shapeType === 'circle') {
+      drawHandle(cx + rx, cy, '#0284C7');
+      ctx.fillStyle = '#0F172A';
+      ctx.font = 'bold 11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`Ø = ${width.toFixed(2)}m`, cx, cy + ry + 22);
+    } else if (shapeType !== 'point') {
       drawHandle(cx + rx, cy, '#D97706');
       drawHandle(cx - rx, cy, '#D97706');
       drawHandle(cx, cy - ry, '#0284C7');
       drawHandle(cx, cy + ry, '#0284C7');
-    }
 
-    ctx.fillStyle = '#0F172A';
-    ctx.font = 'bold 11px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`W = ${width.toFixed(2)}m`, cx, cy + ry + 22);
-    ctx.fillText(`H = ${height.toFixed(2)}m`, cx + rx + 35, cy + 4);
+      ctx.fillStyle = '#0F172A';
+      ctx.font = 'bold 11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`W = ${width.toFixed(2)}m`, cx, cy + ry + 22);
+      ctx.fillText(`H = ${height.toFixed(2)}m`, cx + rx + 35, cy + 4);
+    }
     ctx.textAlign = 'left';
   }, [shapeType, width, height, nExp, mExp, cornerRadius]);
 

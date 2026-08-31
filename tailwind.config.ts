@@ -27,7 +27,10 @@ const config: Config = {
       },
       backdropBlur: {
         xs: "2px",
-      }
+      },
+      fontFamily: {
+        sans: ['Aptos', 'Aptos Display', 'Segoe UI', '-apple-system', 'BlinkMacSystemFont', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+      },
     },
   },
   plugins: [],

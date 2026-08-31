@@ -80,10 +80,10 @@ export function generateFuselageGeometry(
   const sLast = resolved[resolved.length - 1];
 
   const t1 = Math.max(0.02, s1.xPos);
-  const tEnd = sLast.xPos;
+  const tEnd = Math.min(0.98, sLast.xPos);
 
   const S = f.noseRoundness !== undefined ? f.noseRoundness : 0.75;
-  const tailScale = f.tail !== undefined ? f.tail : 0.3;
+  const S_tail = f.tailRoundness !== undefined ? f.tailRoundness : S;
 
   const geometry = new THREE.BufferGeometry();
   const vertices: number[] = [];
@@ -115,7 +115,10 @@ export function generateFuselageGeometry(
     let mExp = s1.mExp;
     let cornerRadius = s1.cornerRadius;
 
-    // 1. Interpolate profile dimensions (width/height) dynamically without Catmull-Rom ripples
+    // 1. Interpolate profile dimensions (width/height) & spatial offsets dynamically
+    let centerOffsetZ = 0;
+    let centerOffsetY = 0;
+
     if (t <= t1) {
       // Nose dome area: blend from 0 (at t=0) to s1 dimensions (at t1) using dome curve
       const ratio = Math.max(0, Math.min(1.0, t / t1));
@@ -132,29 +135,29 @@ export function generateFuselageGeometry(
       nExp = s1.nExp;
       mExp = s1.mExp;
       cornerRadius = s1.cornerRadius;
-    } else if (t >= resolved[resolved.length - 1].xPos) {
-      // Tail cone blending from last station to tail tip
-      const sLast = resolved[resolved.length - 1];
-      const xLast = sLast.xPos;
-      
-      if (xLast < 0.99) {
-        const denom = 1.0 - xLast;
-        const ratio = Math.max(0, Math.min(1.0, (t - xLast) / denom));
-        
-        // Smooth Hermite blend (smoothstep) for crease-free tail transition
-        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
-        const scaleFactor = 1.0 - (1.0 - tailScale) * blend;
-        rx = (sLast.width / 2) * scaleFactor;
-        ry = (sLast.height / 2) * scaleFactor;
+
+      centerOffsetZ = noseZ + (s1.zOffset - noseZ) * blend;
+      centerOffsetY = noseY + (s1.yOffset - noseY) * blend;
+    } else if (t >= tEnd) {
+      // Tail dome area: identical mathematical formulation to the nose, blending from sLast at tEnd down to 0 at t=1.0
+      const denom = 1.0 - tEnd;
+      const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (1.0 - t) / denom)) : 0.0;
+      let blend = 0;
+      if (S_tail <= 1.0) {
+        const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
+        blend = S_tail * domeCurve + (1.0 - S_tail) * ratio;
       } else {
-        // Last station is already at the end of the fuselage (1.0)
-        rx = sLast.width / 2;
-        ry = sLast.height / 2;
+        blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S_tail)));
       }
+      rx = (sLast.width / 2) * blend;
+      ry = (sLast.height / 2) * blend;
       shapeType = sLast.shapeType;
       nExp = sLast.nExp || 2.0;
       mExp = sLast.mExp || sLast.nExp || 2.0;
       cornerRadius = sLast.cornerRadius || 0.3;
+
+      centerOffsetZ = tailZ + (sLast.zOffset - tailZ) * blend;
+      centerOffsetY = tailY + (sLast.yOffset - tailY) * blend;
     } else {
       // Mid cabin - interpolate between adjacent stations
       let idx = 0;
@@ -178,53 +181,13 @@ export function generateFuselageGeometry(
       nExp = (sA.nExp || 2.0) * (1.0 - blend) + (sB.nExp || 2.0) * blend;
       mExp = (sA.mExp || sA.nExp || 2.0) * (1.0 - blend) + (sB.mExp || sB.nExp || 2.0) * blend;
       cornerRadius = (sA.cornerRadius || 0.3) * (1.0 - blend) + (sB.cornerRadius || 0.3) * blend;
+
+      centerOffsetZ = sA.zOffset * (1.0 - blend) + sB.zOffset * blend;
+      centerOffsetY = sA.yOffset * (1.0 - blend) + sB.yOffset * blend;
     }
 
     rx = Math.max(0.0001, rx);
     ry = Math.max(0.0001, ry);
-
-    // 2. Spatial shift blending
-    let centerOffsetZ = 0;
-    let centerOffsetY = 0;
-
-    if (t <= t1) {
-      const ratio = Math.max(0, Math.min(1.0, t / t1));
-      let blend = 0;
-      if (S <= 1.0) {
-        const domeCurve = Math.sqrt(ratio * (2.0 - ratio));
-        blend = S * domeCurve + (1.0 - S) * ratio;
-      } else {
-        blend = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - ratio, 1.0 + S)));
-      }
-      centerOffsetZ = noseZ + (s1.zOffset - noseZ) * blend;
-      centerOffsetY = noseY + (s1.yOffset - noseY) * blend;
-    } else if (t >= tEnd) {
-      const tailDenom = 1.0 - tEnd;
-      if (tailDenom > 0.01) {
-        const ratio = Math.max(0, Math.min(1.0, (t - tEnd) / tailDenom));
-        const blend = ratio * ratio * (3.0 - 2.0 * ratio);
-        centerOffsetZ = sLast.zOffset + (tailZ - sLast.zOffset) * blend;
-        centerOffsetY = sLast.yOffset + (tailY - sLast.yOffset) * blend;
-      } else {
-        centerOffsetZ = sLast.zOffset;
-        centerOffsetY = sLast.yOffset;
-      }
-    } else {
-      let idx = 0;
-      for (let i = 0; i < resolved.length - 1; i++) {
-        if (t >= resolved[i].xPos && t <= resolved[i + 1].xPos) {
-          idx = i;
-          break;
-        }
-      }
-      const sA = resolved[idx];
-      const sB = resolved[idx + 1];
-      const denom = sB.xPos - sA.xPos;
-      const ratio = denom > 0.001 ? Math.max(0, Math.min(1.0, (t - sA.xPos) / denom)) : 0.0;
-      const blend = ratio * ratio * (3.0 - 2.0 * ratio);
-      centerOffsetZ = sA.zOffset * (1.0 - blend) + sB.zOffset * blend;
-      centerOffsetY = sA.yOffset * (1.0 - blend) + sB.yOffset * blend;
-    }
 
     rawProfile.push({ x, rx, ry, centerOffsetZ, centerOffsetY, shapeType, nExp, mExp, cornerRadius });
   }

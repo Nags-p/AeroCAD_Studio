@@ -132,7 +132,7 @@ export function TopToolbar() {
 
         <div className="flex items-center gap-2 bg-sky-600 px-2.5 py-1 rounded text-white font-bold text-sm shadow">
           <Plane className="w-4 h-4 text-white stroke-[2.5]" />
-          <span>TurboDESiM Aero</span>
+          <span>ThermoDESiM Aero</span>
         </div>
 
         <span className="text-slate-300">/</span>
@@ -220,9 +220,6 @@ export function TopToolbar() {
                       const updatedFiles = [newFile, ...files];
                       useFileStore.setState({ files: updatedFiles, activeFileId: newFile.id });
                       localStorage.setItem('aerocad_files', JSON.stringify(updatedFiles));
-                      if (useFileStore.getState().driveAccessToken && useFileStore.getState().drivePassphrase) {
-                        useFileStore.getState().uploadFileToDrive(newFile);
-                      }
                       useAircraftStore.getState().loadJSONModel(newFile.model);
                     }
                     setActiveDropdown(null);
@@ -233,6 +230,13 @@ export function TopToolbar() {
                   }`}
                 >
                   <Copy className="w-3.5 h-3.5 text-slate-500" /> Save Design Copy
+                </button>
+
+                <button
+                  onClick={() => { openModal('cloud_sync'); setActiveDropdown(null); }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-sky-700 font-semibold"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-sky-600" /> Supabase Cloud Vault...
                 </button>
 
                 <div className="my-1 border-t border-slate-200" />
@@ -500,7 +504,7 @@ export function TopToolbar() {
                   }}
                   className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-slate-800"
                 >
-                  <Info className="w-3.5 h-3.5 text-slate-500" /> About TurboDESiM Aero
+                  <Info className="w-3.5 h-3.5 text-slate-500" /> About ThermoDESiM Aero
                 </button>
                 <div className="my-1 border-t border-slate-205" />
                 <button
@@ -620,6 +624,15 @@ export function TopToolbar() {
         >
           <Ruler className="w-3.5 h-3.5 text-amber-600" />
           <span>Analysis</span>
+        </button>
+
+        <button
+          onClick={() => openModal('cloud_sync')}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold border border-sky-200 transition shadow-sm"
+          title="Supabase Cloud CAD Vault & Projects"
+        >
+          <Cloud className="w-3.5 h-3.5 text-sky-600" />
+          <span>Cloud Vault</span>
         </button>
 
       </div>

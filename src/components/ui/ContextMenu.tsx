@@ -35,6 +35,8 @@ export function ContextMenu() {
   const duplicateComponent = useAircraftStore((state) => state.duplicateComponent);
   const jumpToHistoryIndex = useAircraftStore((state) => state.jumpToHistoryIndex);
 
+  const deleteFuselage = useAircraftStore((state) => state.deleteFuselage);
+  const addFuselage = useAircraftStore((state) => state.addFuselage);
   const deleteFuselageSection = useAircraftStore((state) => state.deleteFuselageSection);
   const updateFuselage = useAircraftStore((state) => state.updateFuselage);
   const deleteWing = useAircraftStore((state) => state.deleteWing);
@@ -231,10 +233,20 @@ export function ContextMenu() {
             </button>
           )}
 
+          {contextMenu.targetType === 'fuselage' && (
+            <button
+              onClick={() => triggerAction(() => deleteFuselage())}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Delete Entire Fuselage</span>
+            </button>
+          )}
+
           {contextMenu.targetType === 'engine' && (
             <button
               onClick={() => triggerAction(() => deleteEngine(contextMenu.targetId!))}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left text-red-400"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-400" />
               <span>Delete Engine</span>
@@ -261,12 +273,12 @@ export function ContextMenu() {
             <span>Edit 2D Sketch</span>
           </button>
 
-          {model.fuselage.sections.length > 2 && (
+          {model.fuselage.sections.length > 3 && (
             <>
               <div className="border-t border-slate-800 my-1" />
               <button
                 onClick={() => triggerAction(() => deleteFuselageSection(contextMenu.targetId!))}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left text-red-400"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-red-950/40 text-red-400 hover:text-red-300 transition text-left"
               >
                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
                 <span>Delete Section</span>

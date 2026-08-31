@@ -1,5 +1,5 @@
 {
-  "name": "turbodesim-aero",
+  "name": "thermodesim-aero",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-three/drei": "^9.117.3",
     "@react-three/fiber": "^8.17.10",
+    "@supabase/supabase-js": "^2.112.4",
     "clsx": "^2.1.1",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.460.0",

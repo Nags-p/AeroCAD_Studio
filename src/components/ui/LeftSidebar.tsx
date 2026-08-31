@@ -32,6 +32,8 @@ export function LeftSidebar() {
   const toggleVisibility = useAircraftStore((state) => state.toggleComponentVisibility);
   const toggleLock = useAircraftStore((state) => state.toggleComponentLock);
 
+  const addFuselage = useAircraftStore((state) => state.addFuselage);
+  const deleteFuselage = useAircraftStore((state) => state.deleteFuselage);
   const addFuselageSection = useAircraftStore((state) => state.addFuselageSection);
   const deleteFuselageSection = useAircraftStore((state) => state.deleteFuselageSection);
 
@@ -158,71 +160,68 @@ export function LeftSidebar() {
       {activeTab === 'tree' ? (
         <div className="flex-1 overflow-y-auto p-2 space-y-1.5 text-xs">
           {/* 1. Fuselage Component */}
-          <div className="rounded border border-slate-200 overflow-hidden bg-white shadow-sm">
-            <div
-              onClick={() => setSelected(model.fuselage.id, 'fuselage')}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                showContextMenu(e.clientX, e.clientY, model.fuselage.id, 'fuselage');
-              }}
-              className={`flex items-center justify-between p-2 cursor-pointer transition ${
-                selectedId === model.fuselage.id
-                  ? 'bg-sky-50 text-sky-800 font-semibold border-l-4 border-sky-600'
-                  : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleNode('fuselage');
-                  }}
-                  className="text-slate-400 hover:text-slate-700"
-                >
-                  {openNodes.fuselage ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                </button>
-                <Box className="w-3.5 h-3.5 text-sky-600" />
-                <span>{model.fuselage.name}</span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleVisibility(model.fuselage.id);
-                  }}
-                  className="text-slate-400 hover:text-slate-700 p-1"
-                  title="Toggle Visibility"
-                >
-                  {model.fuselage.visible ? <Eye className="w-3.5 h-3.5 text-slate-600" /> : <EyeOff className="w-3.5 h-3.5 text-red-500" />}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleLock(model.fuselage.id);
-                  }}
-                  className="text-slate-400 hover:text-slate-700 p-1"
-                  title="Lock Component"
-                >
-                  {model.fuselage.locked ? <Lock className="w-3.5 h-3.5 text-amber-500" /> : <Unlock className="w-3.5 h-3.5" />}
-                </button>
-                {(model.fuselage.visible || model.fuselage.sections.length > 0) && (
+          {model.fuselage && model.fuselage.visible ? (
+            <div className="rounded border border-slate-200 overflow-hidden bg-white shadow-sm">
+              <div
+                onClick={() => setSelected(model.fuselage.id, 'fuselage')}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  showContextMenu(e.clientX, e.clientY, model.fuselage.id, 'fuselage');
+                }}
+                className={`flex items-center justify-between p-2 cursor-pointer transition ${
+                  selectedId === model.fuselage.id
+                    ? 'bg-sky-50 text-sky-800 font-semibold border-l-4 border-sky-600'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm('Are you sure you want to delete the complete fuselage?')) {
-                        updateFuselage({ visible: false, sections: [] });
-                      }
+                      toggleNode('fuselage');
                     }}
-                    className="text-slate-400 hover:text-red-500 p-1"
-                    title="Delete Complete Fuselage"
+                    className="text-slate-400 hover:text-slate-700"
+                  >
+                    {openNodes.fuselage ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </button>
+                  <Box className="w-3.5 h-3.5 text-sky-600" />
+                  <span>{model.fuselage.name}</span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleVisibility(model.fuselage.id);
+                    }}
+                    className="text-slate-400 hover:text-slate-700 p-1"
+                    title="Toggle Visibility"
+                  >
+                    {model.fuselage.visible ? <Eye className="w-3.5 h-3.5 text-slate-600" /> : <EyeOff className="w-3.5 h-3.5 text-red-500" />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleLock(model.fuselage.id);
+                    }}
+                    className="text-slate-400 hover:text-slate-700 p-1"
+                    title="Lock Component"
+                  >
+                    {model.fuselage.locked ? <Lock className="w-3.5 h-3.5 text-amber-500" /> : <Unlock className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteFuselage();
+                    }}
+                    className="text-slate-400 hover:text-red-500 p-1 transition"
+                    title="Delete Entire Fuselage"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                )}
+                </div>
               </div>
-            </div>
 
             {/* Fuselage Stations Sub-tree */}
             {openNodes.fuselage && (
@@ -241,6 +240,24 @@ export function LeftSidebar() {
                   </button>
                 </div>
 
+                {/* Nose Tip Apex Section */}
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelected(model.fuselage.id, 'fuselage');
+                  }}
+                  className={`flex items-center justify-between p-1.5 rounded cursor-pointer transition text-xs ${
+                    selectedId === model.fuselage.id && selectedType === 'fuselage' ? 'bg-sky-100 text-sky-900 font-semibold border-l-2 border-sky-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-sky-500 flex items-center justify-center text-[8px] text-white font-bold">N</span>
+                    <span>Nose Tip (Dome Apex)</span>
+                  </div>
+                  <span className="font-mono text-[9px] text-slate-400">x=0%</span>
+                </div>
+
+                {/* Intermediate Cross-Sections */}
                 {model.fuselage.sections.map((sec, idx) => (
                   <div
                     key={sec.id}
@@ -264,24 +281,56 @@ export function LeftSidebar() {
 
                     <div className="flex items-center gap-1 font-mono text-[9px] text-slate-400">
                       <span>x={(sec.xPos * 100).toFixed(0)}%</span>
-                      {model.fuselage.sections.length > 2 && (
+                      {model.fuselage.sections.length > 3 ? (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteFuselageSection(sec.id);
                           }}
-                          className="p-1 text-red-500 hover:bg-white rounded"
+                          className="p-1 text-red-500 hover:bg-white rounded transition"
                           title="Delete Section Station"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                      ) : (
+                        <span title="Compulsory Core Section (Nose, Mid, Tail are permanent)">
+                          <Lock className="w-3 h-3 text-slate-300 ml-1" />
+                        </span>
                       )}
                     </div>
                   </div>
                 ))}
+
+                {/* Tail Tip Apex Section */}
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelected(model.fuselage.id, 'fuselage');
+                  }}
+                  className={`flex items-center justify-between p-1.5 rounded cursor-pointer transition text-xs ${
+                    selectedId === model.fuselage.id && selectedType === 'fuselage' ? 'bg-sky-100 text-sky-900 font-semibold border-l-2 border-sky-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-sky-500 flex items-center justify-center text-[8px] text-white font-bold">T</span>
+                    <span>Tail Tip (Aft Apex)</span>
+                  </div>
+                  <span className="font-mono text-[9px] text-slate-400">x=100%</span>
+                </div>
               </div>
             )}
           </div>
+        ) : (
+          <div className="p-2 border border-dashed border-sky-200 rounded-lg text-center bg-sky-50/50 hover:bg-sky-50 transition">
+            <button
+              onClick={() => addFuselage()}
+              className="text-xs text-sky-700 font-semibold flex items-center justify-center gap-1.5 w-full py-1 cursor-pointer"
+              title="Add Standard Fuselage Component (with Nose, Mid, Tail sections)"
+            >
+              <Plus className="w-3.5 h-3.5 text-sky-600" /> Add Fuselage
+            </button>
+          </div>
+        )}
 
           {/* 2. Wings Component Tree */}
           <div className="rounded border border-slate-200 overflow-hidden bg-white shadow-sm">
