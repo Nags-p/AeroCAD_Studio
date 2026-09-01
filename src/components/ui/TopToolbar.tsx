@@ -33,7 +33,9 @@ import {
   ShieldAlert,
   FileText,
   Lock,
-  Scale
+  Scale,
+  User,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAircraftStore } from '@/store/useAircraftStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -234,9 +236,9 @@ export function TopToolbar() {
 
                 <button
                   onClick={() => { openModal('cloud_sync'); setActiveDropdown(null); }}
-                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-sky-700 font-semibold"
+                  className="w-full text-left px-3 py-1.5 hover:bg-slate-100 text-xs flex items-center gap-2 text-sky-700 font-semibold cursor-pointer"
                 >
-                  <Cloud className="w-3.5 h-3.5 text-sky-600" /> Supabase Cloud Vault...
+                  <User className="w-3.5 h-3.5 text-sky-600" /> User Profile & Sync...
                 </button>
 
                 <div className="my-1 border-t border-slate-200" />
@@ -628,11 +630,20 @@ export function TopToolbar() {
 
         <button
           onClick={() => openModal('cloud_sync')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold border border-sky-200 transition shadow-sm"
-          title="Supabase Cloud CAD Vault & Projects"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold border border-sky-200 transition shadow-sm cursor-pointer"
+          title="User Profile & Cloud Sync"
         >
-          <Cloud className="w-3.5 h-3.5 text-sky-600" />
-          <span>Cloud Vault</span>
+          <User className="w-3.5 h-3.5 text-sky-600" />
+          <span>Profile</span>
+        </button>
+
+        <button
+          onClick={() => openModal('admin_panel')}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 transition shadow-sm cursor-pointer"
+          title="Admin Directory & User Intelligence"
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Admin</span>
         </button>
 
       </div>

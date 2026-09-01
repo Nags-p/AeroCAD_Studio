@@ -29,6 +29,7 @@ import { DesignDatabaseModal } from '@/components/ui/DesignDatabaseModal';
 import { SettingsModal } from '@/components/ui/SettingsModal';
 import { AboutModal } from '@/components/ui/AboutModal';
 import { CloudSyncModal } from '@/components/ui/CloudSyncModal';
+import { AdminPanelModal } from '@/components/ui/AdminPanelModal';
 import { Dashboard } from '@/components/ui/Dashboard';
 import { AuthGate } from '@/components/ui/AuthGate';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -246,6 +247,7 @@ export default function ThermoDESiMAero() {
       <SettingsModal />
       <AboutModal />
       <CloudSyncModal />
+      <AdminPanelModal />
       <ContextMenu />
     </>
   );

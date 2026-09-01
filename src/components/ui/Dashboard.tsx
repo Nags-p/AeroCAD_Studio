@@ -41,6 +41,7 @@ import {
   Copy,
   Sliders,
   CheckCircle2,
+  User,
 } from 'lucide-react';
 
 // Current changelog version — bump this when you want to show a new banner
@@ -321,7 +322,7 @@ export function Dashboard() {
           {supabaseUser ? (
             <div className="flex items-center gap-2.5 bg-slate-100 px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs shadow-inner">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-slate-600">Vault: <strong className="text-slate-800 font-semibold">{supabaseUser.email}</strong></span>
+              <span className="text-slate-600">Account: <strong className="text-slate-800 font-semibold">{supabaseUser.user_metadata?.full_name || supabaseUser.email}</strong></span>
               <div className="w-px h-3.5 bg-slate-300 mx-0.5" />
               {isSyncing ? (
                 <span className="text-sky-600 font-bold text-[11px] flex items-center gap-1 animate-pulse">
@@ -331,7 +332,7 @@ export function Dashboard() {
                 <button
                   onClick={() => syncAllFilesToVault()}
                   className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer font-bold text-[11px]"
-                  title="Sync all designs to Cloud Vault now"
+                  title="Sync all designs to Cloud now"
                 >
                   <RefreshCw className="w-3 h-3 text-emerald-600" />
                   <span>Sync All</span>
@@ -340,15 +341,23 @@ export function Dashboard() {
               <button
                 onClick={() => openModal('cloud_sync')}
                 className="text-sky-600 hover:text-sky-700 hover:bg-sky-50 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer font-bold text-[11px]"
-                title="Open Cloud Vault"
+                title="User Profile & Settings"
               >
-                <Cloud className="w-3 h-3 text-sky-500" />
-                <span>Vault</span>
+                <User className="w-3 h-3 text-sky-500" />
+                <span>Profile</span>
+              </button>
+              <button
+                onClick={() => openModal('admin_panel')}
+                className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer font-bold text-[11px]"
+                title="Admin Directory & User Intelligence"
+              >
+                <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                <span>Admin</span>
               </button>
               <button
                 onClick={() => supabase.auth.signOut()}
                 className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition cursor-pointer"
-                title="Sign Out of Supabase"
+                title="Sign Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
@@ -358,8 +367,8 @@ export function Dashboard() {
               onClick={() => openModal('cloud_sync')}
               className="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition shadow-md hover:shadow-lg active:translate-y-[1px] cursor-pointer"
             >
-              <Cloud className="w-3.5 h-3.5 text-white" />
-              <span>Connect Supabase Vault</span>
+              <User className="w-3.5 h-3.5 text-white" />
+              <span>Connect Profile</span>
             </button>
           )}
 
@@ -405,7 +414,7 @@ export function Dashboard() {
             <div className="space-y-2">
               <h1 className="text-2xl font-black text-white flex items-center gap-2.5 tracking-tight">
                 <Sparkles className="w-6 h-6 text-sky-400" />
-                Welcome to ThermoDESiM Aero{supabaseUser?.email ? `, ${supabaseUser.email.split('@')[0]}` : ''}
+                Welcome to ThermoDESiM Aero{supabaseUser ? `, ${supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.display_name || (supabaseUser.email ? supabaseUser.email.split('@')[0] : '')}` : ''}
               </h1>
               <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
                 High-precision parametric aerospace design and aerodynamics workbench. You have <strong className="text-white font-extrabold">{files.length}</strong> active aircraft design{files.length === 1 ? '' : 's'} loaded in your workspace.

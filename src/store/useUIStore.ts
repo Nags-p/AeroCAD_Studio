@@ -4,7 +4,7 @@ import { UnitSystem } from '@/types/aircraft';
 
 export type CameraPresetView = 'perspective' | 'top' | 'front' | 'side' | 'iso';
 export type VisualShadingMode = 'solid' | 'wireframe' | 'xray' | 'exploded';
-export type ActiveModalType = 'sketcher' | 'airfoil' | 'presets' | 'measurements' | 'export' | 'import' | 'engineering' | 'database' | 'settings' | 'about' | 'cloud_sync' | null;
+export type ActiveModalType = 'sketcher' | 'airfoil' | 'presets' | 'measurements' | 'export' | 'import' | 'engineering' | 'database' | 'settings' | 'about' | 'cloud_sync' | 'admin_panel' | null;
 export type AnalysisModeType = 'none' | 'pressure' | 'loading' | 'mass';
 export type EngineeringTabType = 'atmosphere' | 'stability' | 'aerodynamics' | 'structures';
 
